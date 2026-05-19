@@ -39,6 +39,8 @@ func NormalizeAction(def *ActionDef, defaultTimeout int) {
 	}
 	if def.Cwd == "" {
 		def.Cwd = "."
+	} else {
+		def.Cwd = os.ExpandEnv(def.Cwd)
 	}
 }
 
@@ -55,6 +57,7 @@ func LoadAction(actionDir, actionID string) (*ActionDef, error) {
 		return nil, fmt.Errorf("action %q has no command", actionID)
 	}
 	def.ID = actionID
+	def.Cwd = os.ExpandEnv(def.Cwd)
 	return &def, nil
 }
 
