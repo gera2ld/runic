@@ -34,6 +34,25 @@
       return ts ? new Date(ts).toLocaleString() : '-'
     }
 
+    function patchHistory(current, updates) {
+      if (!Array.isArray(updates)) return current
+      var res = [...current]
+      for (var i = 0; i < updates.length; i++) {
+        var u = updates[i]
+        var found = false
+        for (var j = 0; j < res.length; j++) {
+          if (res[j].id === u.id) {
+            res[j] = Object.assign({}, res[j], u)
+            found = true
+            break
+          }
+        }
+        if (!found) res.push(u)
+      }
+      res.sort((a, b) => b.id - a.id)
+      return res.slice(0, 100)
+    }
+
     function formatTimeout(seconds) {
       return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm'
     }
@@ -163,6 +182,15 @@
           loading.value = false
         }
 
+        async function pollHistory() {
+          var running = history.value.filter(e => e.status === 'RUNNING').map(e => e.id)
+          var url = running.length > 0 ? '/api/history?ids=' + running.join(',') : '/api/history'
+          try {
+            var h = await fetchJSON(url)
+            history.value = patchHistory(history.value, h)
+          } catch (e) { console.error(e) }
+        }
+
         async function refreshActions() {
           actionLoading.value = true
           try {
@@ -179,7 +207,7 @@
 
         onMounted(function() {
           refresh()
-          pollTimer = setInterval(refreshHistory, 3000)
+          pollTimer = setInterval(pollHistory, 3000)
         })
 
         onUnmounted(function() {
@@ -250,6 +278,15 @@
           initialLoading.value = false
         }
 
+        async function poll() {
+          var running = history.value.filter(e => e.status === 'RUNNING').map(e => e.id)
+          var url = running.length > 0 ? '/api/history?ids=' + running.join(',') : '/api/history'
+          try {
+            var h = await fetchJSON(url)
+            history.value = patchHistory(history.value, h)
+          } catch (e) { console.error(e) }
+        }
+
         async function cleanLogs() {
           if (cleaning.value) return
           cleaning.value = true
@@ -264,7 +301,7 @@
 
         onMounted(function() {
           refresh()
-          pollTimer = setInterval(refresh, 3000)
+          pollTimer = setInterval(poll, 3000)
         })
 
         onUnmounted(function() {
@@ -435,9 +472,18 @@
           loading.value = false
         }
 
+        async function poll() {
+          var running = history.value.filter(e => e.status === 'RUNNING').map(e => e.id)
+          if (running.length === 0) return
+          try {
+            var h = await fetchJSON('/api/history?ids=' + running.join(','))
+            history.value = patchHistory(history.value, h)
+          } catch (e) { console.error(e) }
+        }
+
         function togglePolling() {
           if (hasRunning()) {
-            if (!pollTimer) pollTimer = setInterval(refresh, 3000)
+            if (!pollTimer) pollTimer = setInterval(poll, 3000)
           } else {
             if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
           }
@@ -489,14 +535,9 @@
         async function refresh() {
           try {
             var hid = route.params && route.params.hid ? parseInt(route.params.hid) : 0
-            var h = await fetchJSON('/api/history')
-            if (Array.isArray(h)) {
-              for (var i = 0; i < h.length; i++) {
-                if (h[i].id === hid) {
-                  entry.value = h[i]
-                  break
-                }
-              }
+            var h = await fetchJSON('/api/history?ids=' + hid)
+            if (Array.isArray(h) && h.length > 0) {
+              entry.value = h[0]
             }
             var lres = await fetch('/api/logs/' + hid)
             if (lres.ok) logContent.value = await lres.text()

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,7 +79,24 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	entries, err := s.db.ListHistory(50)
+
+	idStr := r.URL.Query().Get("ids")
+	var entries []db.HistoryEntry
+	var err error
+
+	if idStr != "" {
+		parts := strings.Split(idStr, ",")
+		var ids []int64
+		for _, p := range parts {
+			if id, err := strconv.ParseInt(p, 10, 64); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		entries, err = s.db.GetHistoryByIDs(ids)
+	} else {
+		entries, err = s.db.ListHistory(50)
+	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -112,6 +112,39 @@ func (db *DB) GetHistoryByID(id int64) (*HistoryEntry, error) {
 	return &e, nil
 }
 
+func (db *DB) GetHistoryByIDs(ids []int64) ([]HistoryEntry, error) {
+	if len(ids) == 0 {
+		return []HistoryEntry{}, nil
+	}
+
+	query := "SELECT id, action_id, status, duration_ms, log_file_path, created_at FROM history WHERE id IN ("
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		if i > 0 {
+			query += ","
+		}
+		query += "?"
+		args[i] = id
+	}
+	query += ") ORDER BY id DESC"
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []HistoryEntry
+	for rows.Next() {
+		var e HistoryEntry
+		if err := rows.Scan(&e.ID, &e.ActionID, &e.Status, &e.DurationMs, &e.LogFilePath, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
 func (db *DB) DeleteHistoryBefore(t time.Time) (int64, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
