@@ -8,6 +8,7 @@ import (
 	"github.com/gera2ld/runic/internal/db"
 	"github.com/gera2ld/runic/internal/executor"
 	"github.com/gera2ld/runic/internal/server"
+	"github.com/gera2ld/runic/internal/sse"
 )
 
 func main() {
@@ -17,6 +18,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	broker := sse.NewBroker()
+
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[error] failed to open database: %v\n", err)
@@ -24,5 +27,5 @@ func main() {
 	}
 	defer database.Close()
 
-	server.Serve(cfg, executor.NewRunner(cfg), database)
+	server.Serve(cfg, executor.NewRunner(cfg, broker), database, broker)
 }

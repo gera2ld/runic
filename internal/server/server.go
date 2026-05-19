@@ -15,6 +15,7 @@ import (
 	"github.com/gera2ld/runic/internal/db"
 	"github.com/gera2ld/runic/internal/executor"
 	"github.com/gera2ld/runic/internal/logmgr"
+	"github.com/gera2ld/runic/internal/sse"
 )
 
 //go:embed web/index.html
@@ -24,13 +25,15 @@ type Server struct {
 	cfg    *config.Config
 	db     *db.DB
 	runner *executor.Runner
+	broker *sse.Broker
 }
 
-func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
+func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, broker *sse.Broker) {
 	s := &Server{
 		cfg:    cfg,
 		db:     d,
 		runner: runner,
+		broker: broker,
 	}
 
 	os.MkdirAll(cfg.ActionDir, 0755)
@@ -38,6 +41,7 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/api/events", s.broker.Handler())
 	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/logs/", s.handleLogs)
 	mux.HandleFunc("/api/actions/", s.handleActions)
@@ -52,7 +56,7 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
 		http.NotFound(w, r)
 		return
 	}

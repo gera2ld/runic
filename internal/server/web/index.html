@@ -3,256 +3,377 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>runic — Execution Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>runic</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen">
-  <div id="app">
-    <div class="max-w-7xl mx-auto p-6">
-      <header class="mb-8 flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-emerald-400 tracking-tight">runic</h1>
-          <p class="text-gray-500 text-sm mt-1">Command Execution &amp; Log Dashboard</p>
-        </div>
-        <div class="flex gap-3">
-          <button @click="triggerClean" :disabled="cleaning" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50">
-            [[ cleaning ? 'Cleaning...' : 'Clean Logs' ]]
-          </button>
-          <button @click="refreshAll" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">
-            Refresh
-          </button>
-        </div>
-      </header>
-
-      <section class="mb-10">
-        <h2 class="text-lg font-semibold mb-4 text-gray-300 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-          Actions
-        </h2>
-        <div v-if="loading" class="text-gray-600 text-sm">Loading actions...</div>
-        <div v-else-if="actions.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">
-          No actions found. Place YAML files in <code class="text-emerald-400">actions/&lt;id&gt;.yml</code>
-        </div>
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div v-for="a in actions" :key="a.id" class="bg-gray-900 border border-gray-800 hover:border-emerald-500/50 rounded-lg transition">
-            <div class="p-4">
-              <div class="flex items-center justify-between mb-1">
-                <span class="font-semibold text-emerald-400">[[ a.name || a.id ]]</span>
-                <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ formatTimeout(a.timeout) ]]</span>
-              </div>
-              <div class="text-[11px] text-gray-500 font-mono truncate mb-3" :title="a.command">[[ a.command ]]</div>
-              <button
-                @click="triggerAction(a.id)"
-                :disabled="runningActions[a.id]"
-                class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                [[ runningActions[a.id] ? 'Running...' : 'Run' ]]
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2 class="text-lg font-semibold mb-4 text-gray-300 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Execution History
-        </h2>
-        <div v-if="loading" class="text-gray-600 text-sm">Loading history...</div>
-        <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">
-          No executions yet.
-        </div>
-        <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
-              <tr>
-                <th class="px-4 py-3 text-left w-16">ID</th>
-                <th class="px-4 py-3 text-left">Action</th>
-                <th class="px-4 py-3 text-left w-28">Status</th>
-                <th class="px-4 py-3 text-left w-24">Duration</th>
-                <th class="px-4 py-3 text-left w-48">Time</th>
-                <th class="px-4 py-3 text-left w-20">Log</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-800/60">
-              <tr v-for="e in history" :key="e.id" class="hover:bg-gray-900/50 transition">
-                <td class="px-4 py-3 font-mono text-gray-600">[[ e.id ]]</td>
-                <td class="px-4 py-3 font-mono text-emerald-300">[[ e.action_id ]]</td>
-                <td class="px-4 py-3">
-                  <span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">
-                    [[ e.status ]]
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
-                <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                <td class="px-4 py-3">
-                  <button @click="viewLog(e.id)" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-lg text-sm font-medium transition-all">
-      [[ toast ]]
-    </div>
-
-    <div v-if="showModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" @click.self="closeModal">
-      <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-5xl h-[80vh] flex flex-col">
-        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-700">
-          <span class="font-mono text-sm text-emerald-400">Log #[[ modalId ]]</span>
-          <button @click="closeModal" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
-        </div>
-        <pre class="flex-1 overflow-auto p-4 font-mono text-xs text-gray-300 leading-relaxed">[[ logContent ]]</pre>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
 
   <script>
-    const { createApp, ref, onMounted, onUnmounted } = Vue
+    const { createApp, ref, onMounted, computed, watch } = Vue
+    const { createRouter, createWebHistory, useRoute, useRouter } = VueRouter
 
-    createApp({
+    async function fetchJSON(url) {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      return res.json()
+    }
+
+    function statusClass(s) {
+      return { RUNNING: 'bg-yellow-600', SUCCESS: 'bg-emerald-600', FAILED: 'bg-red-600', TIMEOUT: 'bg-orange-600' }[s] || 'bg-gray-600'
+    }
+
+    function formatMs(ms) {
+      if (!ms && ms !== 0) return '-'
+      return ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's'
+    }
+
+    function formatDate(ts) {
+      return ts ? new Date(ts).toLocaleString() : '-'
+    }
+
+    function formatTimeout(seconds) {
+      if (!seconds) return '5m'
+      return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm'
+    }
+
+    const AppLayout = {
+      props: ['toast'],
+      emits: ['toast'],
       delimiters: ['[[', ']]'],
+      template: `
+        <div class="min-h-screen bg-gray-950 text-gray-100">
+          <nav class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
+            <router-link to="/" class="text-xl font-bold text-emerald-400">runic</router-link>
+            <router-link to="/actions" class="text-gray-400 hover:text-white text-sm">Actions</router-link>
+            <router-link v-if="actionCrumb" :to="'/actions/' + actionCrumb" class="text-gray-400 hover:text-white text-sm">[[ actionCrumb ]]</router-link>
+            <router-link v-if="logCrumb" :to="'/actions/' + actionCrumb + '/logs/' + logCrumb" class="text-gray-400 hover:text-white text-sm">Log #[[ logCrumb ]]</router-link>
+          </nav>
+          <main class="max-w-7xl mx-auto p-6"><slot></slot></main>
+          <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-lg text-sm font-medium">[[ toast ]]</div>
+        </div>
+      `,
       setup() {
+        const route = useRoute()
+        const actionCrumb = computed(() => route.params.id || null)
+        const logCrumb = computed(() => route.params.hid || null)
+        return { actionCrumb, logCrumb }
+      }
+    }
+
+    const Dashboard = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout :toast="toast" @toast="v => toast = v">
+          <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold">Recent Executions</h1>
+            <div class="flex gap-2">
+              <button @click="cleanLogs" :disabled="cleaning" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50">
+                [[ cleaning ? 'Cleaning...' : 'Clean Logs' ]]
+              </button>
+              <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
+            </div>
+          </div>
+          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">No executions yet.</div>
+          <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                <tr>
+                  <th class="px-4 py-3 text-left w-16">ID</th>
+                  <th class="px-4 py-3 text-left">Action</th>
+                  <th class="px-4 py-3 text-left w-28">Status</th>
+                  <th class="px-4 py-3 text-left w-24">Duration</th>
+                  <th class="px-4 py-3 text-left w-48">Time</th>
+                  <th class="px-4 py-3 text-left w-20">Log</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-800/60">
+                <tr v-for="e in history" :key="e.id" class="hover:bg-gray-900/50 transition">
+                  <td class="px-4 py-3 font-mono text-gray-600">[[ e.id ]]</td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline">[[ e.action_id ]]</router-link></td>
+                  <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
+                  <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
+                  <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/logs/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </AppLayout>
+      `,
+      components: { AppLayout },
+      setup() {
+        const router = useRouter()
         const history = ref([])
-        const actions = ref([])
         const loading = ref(true)
-        const showModal = ref(false)
-        const modalId = ref(null)
-        const logContent = ref('')
-        const cleaning = ref(false)
         const toast = ref('')
-        const runningActions = ref({})
-        let pollTimer = null
+        const cleaning = ref(false)
+        let es = null
 
-        async function fetchJSON(url) {
-          const res = await fetch(url)
-          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-          return res.json()
-        }
-
-        function showToast(msg) {
-          toast.value = msg
-          setTimeout(() => { toast.value = '' }, 3000)
-        }
-
-        async function refreshHistory() {
-          try {
-            const entries = await fetchJSON('/api/history')
-            history.value = entries
-            const running = {}
-            entries.forEach(e => {
-              if (e.status === 'RUNNING') running[e.action_id] = true
-            })
-            runningActions.value = running
-          } catch (e) {
-            console.error('Failed to load history:', e)
-          }
-        }
-
-        async function refreshActions() {
-          try {
-            actions.value = await fetchJSON('/api/actions')
-          } catch (e) {
-            console.error('Failed to load actions:', e)
-          }
-        }
-
-        async function refreshAll() {
+        async function refresh() {
           loading.value = true
-          await Promise.all([refreshHistory(), refreshActions()])
+          try {
+            var h = await fetchJSON('/api/history')
+            history.value = Array.isArray(h) ? h : []
+          } catch (e) { console.error(e); history.value = [] }
           loading.value = false
         }
 
-        async function triggerAction(name) {
-          try {
-            const res = await fetch(`/api/actions/${name}/trigger`, { method: 'POST' })
-            const data = await res.json()
-            if (res.ok) {
-              showToast(`Action "${name}" queued (run #${data.history_id})`)
-              refreshHistory()
-            } else {
-              alert('Failed: ' + data)
-            }
-          } catch (e) {
-            alert('Failed to trigger action: ' + e.message)
-          }
-        }
-
-        async function triggerClean() {
+        async function cleanLogs() {
           if (cleaning.value) return
           cleaning.value = true
           try {
             await fetch('/api/clean', { method: 'POST' })
-            showToast('Logs cleaned')
-            refreshHistory()
-          } catch (e) {
-            alert('Clean failed: ' + e.message)
-          } finally {
-            cleaning.value = false
-          }
-        }
-
-        async function viewLog(id) {
-          try {
-            const res = await fetch(`/api/logs/${id}`)
-            if (!res.ok) throw new Error('Log not found')
-            modalId.value = id
-            logContent.value = await res.text()
-            showModal.value = true
-          } catch (e) {
-            alert(e.message)
-          }
-        }
-
-        function closeModal() {
-          showModal.value = false
-        }
-
-        function statusClass(s) {
-          const map = { RUNNING: 'bg-yellow-600', SUCCESS: 'bg-emerald-600', FAILED: 'bg-red-600', TIMEOUT: 'bg-orange-600' }
-          return map[s] || 'bg-gray-600'
-        }
-
-        function formatMs(ms) {
-          if (!ms && ms !== 0) return '-'
-          if (ms < 1000) return ms + 'ms'
-          return (ms / 1000).toFixed(1) + 's'
-        }
-
-        function formatDate(ts) {
-          if (!ts) return '-'
-          return new Date(ts).toLocaleString()
-        }
-
-        function formatTimeout(seconds) {
-          if (!seconds) return '5m'
-          if (seconds < 60) return seconds + 's'
-          return Math.floor(seconds / 60) + 'm'
+            toast.value = 'Logs cleaned'
+            setTimeout(() => { toast.value = '' }, 3000)
+            refresh()
+          } catch (e) { alert('Clean failed: ' + e.message) }
+          finally { cleaning.value = false }
         }
 
         onMounted(() => {
-          refreshAll()
-          pollTimer = setInterval(refreshHistory, 15000)
+          refresh()
+          es = new EventSource('/api/events')
+          es.onmessage = (e) => {
+            try {
+              const msg = JSON.parse(e.data)
+              if (msg.type === 'action_end') refresh()
+            } catch (err) { console.error(err) }
+          }
+          es.onerror = () => { es.close() }
         })
 
-        onUnmounted(() => {
-          if (pollTimer) clearInterval(pollTimer)
-        })
-
-        return {
-          history, actions, loading,
-          showModal, modalId, logContent,
-          cleaning, toast, runningActions,
-          refreshAll, triggerAction, triggerClean,
-          viewLog, closeModal,
-          statusClass, formatMs, formatDate, formatTimeout
-        }
+        return { history, loading, toast, cleaning, refresh, cleanLogs, statusClass, formatMs, formatDate }
       }
-    }).mount('#app')
+    }
+
+    const ActionList = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout>
+          <h1 class="text-2xl font-semibold mb-6">Actions</h1>
+          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <div v-else-if="actions.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">
+            No actions found. Place YAML files in <code class="text-emerald-400">actions/&lt;id&gt;.yml</code>
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div v-for="a in actions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <router-link :to="'/actions/' + a.id" class="font-semibold text-emerald-400 hover:underline truncate">[[ a.name || a.id ]]</router-link>
+                <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono ml-2 shrink-0">[[ formatTimeout(a.timeout) ]]</span>
+              </div>
+              <div class="text-[11px] text-gray-500 font-mono truncate mb-3" :title="a.command">[[ a.command ]]</div>
+              <button @click="trigger(a.id)" class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition">Run</button>
+            </div>
+          </div>
+        </AppLayout>
+      `,
+      components: { AppLayout },
+      setup() {
+        const actions = ref([])
+        const loading = ref(true)
+        const router = useRouter()
+
+        async function refresh() {
+          loading.value = true
+          try {
+            var a = await fetchJSON('/api/actions')
+            actions.value = Array.isArray(a) ? a : []
+          } catch (e) { console.error(e); actions.value = [] }
+          loading.value = false
+        }
+
+        async function trigger(id) {
+          await fetch(`/api/actions/${id}/trigger`, { method: 'POST' })
+          router.push('/')
+        }
+
+        onMounted(() => { refresh() })
+
+        return { actions, loading, trigger, formatTimeout }
+      }
+    }
+
+    const ActionDetail = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout>
+          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <template v-else>
+            <div v-if="actionDef" class="mb-8 bg-gray-900 border border-gray-800 rounded-lg p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-semibold text-emerald-400">[[ actionDef.name ]]</h1>
+                <button @click="trigger" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Run</button>
+              </div>
+              <div class="space-y-2 text-sm font-mono text-gray-400">
+                <div><span class="text-gray-600">ID:</span> [[ actionDef.id ]]</div>
+                <div><span class="text-gray-600">Timeout:</span> [[ actionDef.timeout || 300 ]]s</div>
+                <div v-if="actionDef.cwd"><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
+              </div>
+              <div class="mt-4">
+                <span class="text-gray-600 text-sm">Command:</span>
+                <pre class="mt-2 p-4 bg-gray-950 rounded-lg text-sm text-gray-300 whitespace-pre-wrap">[[ actionDef.command ]]</pre>
+              </div>
+            </div>
+            <div v-else class="text-gray-600 mb-8">Action not found.</div>
+
+            <h2 class="text-lg font-semibold mb-4 text-gray-300">Execution History</h2>
+            <div v-if="filtered.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">No executions yet.</div>
+            <template v-else>
+              <div class="overflow-x-auto rounded-lg border border-gray-800">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                    <tr>
+                      <th class="px-4 py-3 text-left w-16">ID</th>
+                      <th class="px-4 py-3 text-left w-28">Status</th>
+                      <th class="px-4 py-3 text-left w-24">Duration</th>
+                      <th class="px-4 py-3 text-left w-48">Time</th>
+                      <th class="px-4 py-3 text-left w-20">Log</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-800/60">
+                    <tr v-for="e in paged" :key="e.id" class="hover:bg-gray-900/50 transition">
+                      <td class="px-4 py-3 font-mono text-gray-600">[[ e.id ]]</td>
+                      <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
+                      <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
+                      <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
+                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/logs/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-gray-400">
+                <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, filtered.length) ]] of [[ filtered.length ]]</span>
+                <div class="flex gap-2">
+                  <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:bg-gray-800 transition">Prev</button>
+                  <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-emerald-600 text-white' : 'border border-gray-700 hover:bg-gray-800'" class="px-3 py-1 rounded transition">[[ n ]]</button>
+                  <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:bg-gray-800 transition">Next</button>
+                </div>
+              </div>
+            </template>
+          </template>
+        </AppLayout>
+      `,
+      components: { AppLayout },
+      setup() {
+        const route = useRoute()
+        const router = useRouter()
+        const actionDef = ref(null)
+        const history = ref([])
+        const loading = ref(true)
+        const p = ref(1)
+        const perPage = 20
+
+        const filtered = computed(() => {
+          const h = history.value
+          if (!Array.isArray(h)) return []
+          const aid = route.params && route.params.id ? route.params.id : ''
+          return h.filter(function(e) { return e.action_id === aid })
+        })
+        const tp = computed(function() {
+          return Math.max(1, Math.ceil(filtered.value.length / perPage))
+        })
+        const paged = computed(function() {
+          const start = (p.value - 1) * perPage
+          return filtered.value.slice(start, start + perPage)
+        })
+        const pr = computed(function() {
+          var pages = []
+          var max = Math.min(5, tp.value)
+          var s = Math.max(1, p.value - 2)
+          for (var i = 0; i < max; i++) pages.push(s + i)
+          return pages
+        })
+
+        async function refresh() {
+          loading.value = true
+          try {
+            var actions = await fetchJSON('/api/actions')
+            actionDef.value = null
+            for (var i = 0; i < actions.length; i++) {
+              if (actions[i].id === route.params.id) { actionDef.value = actions[i]; break }
+            }
+            var h = await fetchJSON('/api/history')
+            history.value = Array.isArray(h) ? h : []
+            if (p.value > tp.value) p.value = 1
+          } catch (e) { console.error(e); history.value = [] }
+          loading.value = false
+        }
+
+        async function trigger() {
+          try {
+            await fetch('/api/actions/' + route.params.id + '/trigger', { method: 'POST' })
+            refresh()
+          } catch (e) { console.error(e) }
+        }
+
+        onMounted(function() { refresh() })
+        watch(function() { return route.params && route.params.id }, function() { p.value = 1; refresh() })
+
+        return { actionDef, filtered, paged, p, perPage, tp, pr, loading, trigger, statusClass, formatMs, formatDate }
+      }
+    }
+    const LogView = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout>
+          <div v-if="loading" class="text-gray-600">Loading...</div>
+          <template v-else>
+            <div v-if="entry" class="mb-6 flex items-center gap-4 flex-wrap">
+              <span :class="statusClass(entry.status)" class="px-3 py-1.5 rounded text-sm font-bold text-white">[[ entry.status ]]</span>
+              <span class="text-gray-500 text-sm">Action: <router-link :to="'/actions/' + entry.action_id" class="text-emerald-400 font-mono hover:underline">[[ entry.action_id ]]</router-link></span>
+              <span class="text-gray-500 text-sm">Duration: <span class="text-gray-300">[[ formatMs(entry.duration_ms) ]]</span></span>
+              <span class="text-gray-500 text-sm">Started: <span class="text-gray-300">[[ formatDate(entry.created_at) ]]</span></span>
+            </div>
+            <pre class="bg-gray-900 border border-gray-800 rounded-lg p-4 font-mono text-xs text-gray-300 leading-relaxed overflow-auto max-h-[70vh]">[[ logContent || 'No log content.' ]]</pre>
+          </template>
+        </AppLayout>
+      `,
+      components: { AppLayout },
+      setup() {
+        const route = useRoute()
+        const entry = ref(null)
+        const logContent = ref('')
+        const loading = ref(true)
+
+        onMounted(async function() {
+          try {
+            var hid = route.params && route.params.hid ? parseInt(route.params.hid) : 0
+            var h = await fetchJSON('/api/history')
+            if (Array.isArray(h)) {
+              for (var i = 0; i < h.length; i++) {
+                if (h[i].id === hid) { entry.value = h[i]; break }
+              }
+            }
+            var lres = await fetch('/api/logs/' + hid)
+            if (lres.ok) logContent.value = await lres.text()
+          } catch (e) { console.error(e) }
+          loading.value = false
+        })
+
+        return { entry, logContent, loading, statusClass, formatMs, formatDate }
+      }
+    }
+
+    const routes = [
+      { path: '/', component: Dashboard },
+      { path: '/actions', component: ActionList },
+      { path: '/actions/:id', component: ActionDetail },
+      { path: '/actions/:id/logs/:hid', component: LogView },
+    ]
+
+    const router = createRouter({
+      history: createWebHistory(),
+      routes,
+    })
+
+    createApp({
+      delimiters: ['[[', ']]'],
+      template: '<router-view></router-view>',
+    }).use(router).mount('#app')
   </script>
 </body>
 </html>
