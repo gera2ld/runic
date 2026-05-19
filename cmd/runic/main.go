@@ -30,28 +30,12 @@ func main() {
 			cmdUpdate()
 			return
 		case "serve":
-			break
-		default:
-			fmt.Fprintf(os.Stderr, "[error] unknown command: %s\n\n", os.Args[1])
-			printUsage()
-			os.Exit(1)
+			cmdServe()
+			return
 		}
 	}
 
-	cfg, err := config.Load("config.yml")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[error] invalid config: %v\n", err)
-		os.Exit(1)
-	}
-
-	database, err := db.Open(cfg.DBPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[error] failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer database.Close()
-
-	server.Serve(cfg, executor.NewRunner(cfg), database)
+	printUsage()
 }
 
 func cmdUpdate() {
@@ -86,9 +70,29 @@ func cmdUpdate() {
 	}
 }
 
+func cmdServe() {
+	cfg, err := config.Load("config.yml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[error] invalid config: %v\n", err)
+		os.Exit(1)
+	}
+
+	database, err := db.Open(cfg.DBPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[error] failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	server.Serve(cfg, executor.NewRunner(cfg), database)
+}
+
 func printUsage() {
-	fmt.Println(`Usage:
-  runic [serve]   Start the server (default)
+	fmt.Printf(`runic %s
+
+Usage:
+  runic serve     Start the server
   runic update    Check and install latest release
-  runic version   Show version information`)
+  runic version   Show version information
+`, version)
 }
