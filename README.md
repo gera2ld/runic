@@ -43,7 +43,10 @@ command: |
   ./scripts/deploy.sh
 ```
 
-Only `command` is required. `name`, `timeout`, and `cwd` are optional.
+Only `command` is required. `name`, `timeout`, `cwd`, and `cron` are optional.
+
+> [!TIP]
+> Always wrap your `cron` expression in quotes (e.g., `cron: "*/5 * * * *"`) to avoid YAML parsing errors, especially if the expression starts with `*`.
 
 ## Commands
 

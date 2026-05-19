@@ -5,3 +5,4 @@ command: |
   sleep 2
   echo "Bye"
 cwd: ""
+cron: "* * * * *"

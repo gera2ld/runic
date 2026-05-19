@@ -20,6 +20,7 @@ type ActionDef struct {
 	Timeout int    `yaml:"timeout" json:"timeout"`
 	Command string `yaml:"command" json:"command"`
 	Cwd     string `yaml:"cwd" json:"cwd"`
+	Cron    string `yaml:"cron" json:"cron"`
 }
 
 type Runner struct {
@@ -174,6 +175,7 @@ func ListActions(actionDir string, defaultTimeout int) ([]ActionDef, error) {
 		id := strings.TrimSuffix(e.Name(), ".yml")
 		def, err := LoadAction(actionDir, id)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "[executor] failed to load action %s: %v\n", id, err)
 			continue
 		}
 		NormalizeAction(def, defaultTimeout)

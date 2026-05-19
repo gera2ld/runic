@@ -5,8 +5,8 @@ default:
 build:
   go run build.go
 
-dev:
-  CGO_ENABLED=0 go run ./cmd/runic
+dev *args:
+  CGO_ENABLED=0 go run ./cmd/runic {{args}}
 
 clean:
   rm -rf bin/

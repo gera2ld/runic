@@ -26,13 +26,15 @@ type Server struct {
 	cfg    *config.Config
 	db     *db.DB
 	runner *executor.Runner
+	sched  *executor.Scheduler
 }
 
-func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
+func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executor.Scheduler) {
 	s := &Server{
 		cfg:    cfg,
 		db:     d,
 		runner: runner,
+		sched:  sched,
 	}
 
 	os.MkdirAll(cfg.ActionDir, 0755)
