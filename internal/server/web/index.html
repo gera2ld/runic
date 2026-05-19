@@ -107,6 +107,7 @@
                 <div v-for="a in recentActions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-3">
                   <router-link :to="'/actions/' + a.id" class="font-mono text-emerald-400 hover:underline text-sm">[[ a.name || a.id ]]</router-link>
                   <div class="text-[11px] text-gray-500 font-mono truncate mt-1">[[ a.command ]]</div>
+                  <div v-if="a.next_run" class="text-[11px] text-gray-400 mt-2">Next run: <span class="text-gray-300">[[ formatDate(a.next_run) ]]</span></div>
                 </div>
               </div>
             </div>
@@ -125,7 +126,7 @@
                       <th class="px-4 py-2 text-left w-16">ID</th>
                       <th class="px-4 py-2 text-left">Action</th>
                       <th class="px-4 py-2 text-left w-24">Status</th>
-                      <th class="px-4 py-2 text-left w-20">Duration</th>
+                      <th class="px-4 py-2 text-left w-48">Started</th>
                       <th class="px-4 py-2 text-left w-20">Log</th>
                     </tr>
                   </thead>
@@ -134,7 +135,7 @@
                       <td class="px-4 py-2 font-mono text-gray-600">[[ e.id ]]</td>
                       <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline text-xs">[[ e.action_id ]]</router-link></td>
                       <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
-                      <td class="px-4 py-2 text-gray-400 text-xs">[[ formatMs(e.duration_ms) ]]</td>
+                      <td class="px-4 py-2 text-gray-500 text-xs">[[ formatDate(e.created_at) ]]</td>
                       <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
@@ -327,10 +328,12 @@
                 <router-link :to="'/actions/' + a.id" class="font-semibold text-emerald-400 hover:underline truncate">[[ a.name || a.id ]]</router-link>
                 <div class="flex gap-1 shrink-0">
                   <span v-if="a.cron" class="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded font-mono" :title="'Cron: ' + a.cron">Cron</span>
+                  <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono" :title="'Concurrency: ' + (a.concurrency === 0 ? 'unlimited' : a.concurrency)">[[ a.concurrency === 0 ? '∞' : 'x' + a.concurrency ]]</span>
                   <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ formatTimeout(a.timeout) ]]</span>
                 </div>
               </div>
               <div class="text-[11px] text-gray-500 font-mono truncate mb-3" :title="a.command">[[ a.command ]]</div>
+              <div v-if="a.next_run" class="text-[11px] text-gray-400 mb-3">Next run: <span class="text-gray-300">[[ formatDate(a.next_run) ]]</span></div>
               <button @click="trigger(a.id)" class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition">Run</button>
             </div>
           </div>
@@ -352,13 +355,14 @@
         }
 
         async function trigger(id) {
-          await fetch('/api/actions/' + id + '/trigger', { method: 'POST' })
+          const res = await fetch('/api/actions/' + id + '/trigger', { method: 'POST' })
+          if (!res.ok) throw new Error(await res.text())
           router.push('/')
         }
 
         onMounted(function() { refresh() })
 
-        return { actions, loading, trigger, formatTimeout }
+        return { actions, loading, trigger, formatTimeout, formatDate }
       }
     }
 
@@ -378,6 +382,8 @@
                 <div><span class="text-gray-600">Timeout:</span> [[ actionDef.timeout ]]s</div>
                 <div><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
                 <div v-if="actionDef.cron"><span class="text-gray-600">Cron:</span> <span class="text-blue-400">[[ actionDef.cron ]]</span></div>
+                <div v-if="actionDef.next_run"><span class="text-gray-600">Next run:</span> <span class="text-gray-300">[[ formatDate(actionDef.next_run) ]]</span></div>
+                <div><span class="text-gray-600">Concurrency:</span> [[ actionDef.concurrency === 0 ? 'unlimited' : actionDef.concurrency ]]</div>
               </div>
               <div class="mt-4">
                 <span class="text-gray-600 text-sm">Command:</span>
@@ -495,7 +501,8 @@
 
         async function trigger() {
           try {
-            await fetch('/api/actions/' + route.params.id + '/trigger', { method: 'POST' })
+            const res = await fetch('/api/actions/' + route.params.id + '/trigger', { method: 'POST' })
+            if (!res.ok) throw new Error(await res.text())
             refresh()
           } catch (e) { console.error(e) }
         }

@@ -2,33 +2,40 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
+	"gopkg.in/yaml.v3"
 	"runic/internal/config"
 	"runic/internal/db"
 	"runic/internal/logmgr"
-	"gopkg.in/yaml.v3"
 )
 
 type ActionDef struct {
-	ID      string `yaml:"-" json:"id"`
-	Name    string `yaml:"name" json:"name"`
-	Timeout int    `yaml:"timeout" json:"timeout"`
-	Command string `yaml:"command" json:"command"`
-	Cwd     string `yaml:"cwd" json:"cwd"`
-	Cron    string `yaml:"cron" json:"cron"`
+	ID          string     `yaml:"-" json:"id"`
+	Name        string     `yaml:"name" json:"name"`
+	Timeout     int        `yaml:"timeout" json:"timeout"`
+	Command     string     `yaml:"command" json:"command"`
+	Cwd         string     `yaml:"cwd" json:"cwd"`
+	Cron        string     `yaml:"cron" json:"cron"`
+	Concurrency *int       `yaml:"concurrency" json:"concurrency"`
+	NextRun     *time.Time `yaml:"-" json:"next_run,omitempty"`
 }
 
 type Runner struct {
-	cfg *config.Config
+	cfg    *config.Config
+	mu     sync.Mutex
+	active map[string]int
 }
 
 func NewRunner(cfg *config.Config) *Runner {
-	return &Runner{cfg: cfg}
+	return &Runner{cfg: cfg, active: make(map[string]int)}
 }
 
 func NormalizeAction(def *ActionDef, defaultTimeout int) {
@@ -42,6 +49,13 @@ func NormalizeAction(def *ActionDef, defaultTimeout int) {
 		def.Cwd = "."
 	} else {
 		def.Cwd = os.ExpandEnv(def.Cwd)
+	}
+	if def.Concurrency == nil {
+		concurrency := 1
+		def.Concurrency = &concurrency
+	} else if *def.Concurrency < 0 {
+		concurrency := 1
+		def.Concurrency = &concurrency
 	}
 }
 
@@ -62,6 +76,32 @@ func LoadAction(actionDir, actionID string) (*ActionDef, error) {
 	return &def, nil
 }
 
+func (r *Runner) tryAcquire(actionID string, limit int) bool {
+	if limit <= 0 {
+		return true
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.active[actionID] >= limit {
+		return false
+	}
+	r.active[actionID]++
+	return true
+}
+
+func (r *Runner) release(actionID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.active[actionID] <= 1 {
+		delete(r.active, actionID)
+		return
+	}
+	r.active[actionID]--
+}
+
 type RunResult struct {
 	HistoryID int64
 	ActionID  string
@@ -70,25 +110,34 @@ type RunResult struct {
 	Duration  int64
 }
 
+var ErrConcurrencyLimitReached = errors.New("action concurrency limit reached")
+
 func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionDir, actionID, payload string) (int64, error) {
 	def, err := LoadAction(actionDir, actionID)
 	if err != nil {
 		return 0, err
 	}
+	NormalizeAction(def, r.cfg.Timeout)
+	if !r.tryAcquire(actionID, *def.Concurrency) {
+		return 0, fmt.Errorf("%w: %s", ErrConcurrencyLimitReached, actionID)
+	}
 
 	sl, err := logmgr.NewStreamLogger(logDir, actionID)
 	if err != nil {
+		r.release(actionID)
 		return 0, fmt.Errorf("failed to create stream logger: %w", err)
 	}
 
 	historyID, err := d.InsertHistory(actionID, sl.FilePath())
 	if err != nil {
 		sl.Close()
+		r.release(actionID)
 		return 0, fmt.Errorf("failed to insert history: %w", err)
 	}
 
 	go func() {
 		defer sl.Close()
+		defer r.release(actionID)
 		result := r.runCommand(ctx, def, sl, payload, actionID)
 		result.HistoryID = historyID
 		d.UpdateHistory(result.HistoryID, result.Status, result.Duration)
@@ -179,6 +228,12 @@ func ListActions(actionDir string, defaultTimeout int) ([]ActionDef, error) {
 			continue
 		}
 		NormalizeAction(def, defaultTimeout)
+		if def.Cron != "" {
+			if schedule, err := cron.ParseStandard(def.Cron); err == nil {
+				nextRun := schedule.Next(time.Now())
+				def.NextRun = &nextRun
+			}
+		}
 		actions = append(actions, *def)
 	}
 	return actions, nil

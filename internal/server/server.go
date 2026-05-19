@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -180,6 +181,10 @@ func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID 
 
 	historyID, err := s.runner.RunAction(context.Background(), s.db, s.cfg.LogDir, s.cfg.ActionDir, actionID, payload)
 	if err != nil {
+		if errors.Is(err, executor.ErrConcurrencyLimitReached) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

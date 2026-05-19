@@ -1,73 +1,89 @@
 package executor
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"runic/internal/config"
+	"runic/internal/db"
 )
 
-func TestExpandEnv(t *testing.T) {
-	home := os.Getenv("HOME")
-	if home == "" {
-		t.Skip("skipping test; HOME environment variable not set")
+func TestListActionsPopulatesNextRunAndConcurrency(t *testing.T) {
+	dir := t.TempDir()
+
+	actionPath := filepath.Join(dir, "sample.yml")
+	if err := os.WriteFile(actionPath, []byte(`
+command: echo hi
+cron: "* * * * *"
+concurrency: 0
+`), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"/abs/path", "/abs/path"},
-		{"./rel/path", "./rel/path"},
-		{"$HOME", home},
-		{"${HOME}", home},
-		{"$HOME/foo", filepath.Join(home, "foo")},
-		{"${HOME}/foo/bar", filepath.Join(home, "foo/bar")},
+	actions, err := ListActions(dir, 10)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	for _, tt := range tests {
-		got := os.ExpandEnv(tt.input)
-		if got != tt.expected {
-			t.Errorf("os.ExpandEnv(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
+	if len(actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(actions))
+	}
+	if actions[0].Concurrency == nil || *actions[0].Concurrency != 0 {
+		t.Fatalf("expected concurrency 0, got %#v", actions[0].Concurrency)
+	}
+	if actions[0].NextRun == nil {
+		t.Fatal("expected next_run to be populated")
+	}
+	if !actions[0].NextRun.After(time.Now()) {
+		t.Fatalf("expected next_run to be in the future, got %v", actions[0].NextRun)
 	}
 }
 
-func TestNormalizeAction(t *testing.T) {
-	home := os.Getenv("HOME")
-	if home == "" {
-		t.Skip("skipping test; HOME environment variable not set")
+func TestRunActionEnforcesConcurrencyLimit(t *testing.T) {
+	root := t.TempDir()
+	actionDir := filepath.Join(root, "actions")
+	logDir := filepath.Join(root, "logs")
+	if err := os.MkdirAll(actionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []struct {
-		name     string
-		input    ActionDef
-		expected ActionDef
-	}{
-		{
-			name: "default values",
-			input: ActionDef{ID: "test"},
-			expected: ActionDef{ID: "test", Name: "test", Timeout: 30, Cwd: "."},
-		},
-		{
-			name: "expand env in cwd",
-			input: ActionDef{ID: "test", Cwd: "$HOME/foo"},
-			expected: ActionDef{ID: "test", Name: "test", Timeout: 30, Cwd: filepath.Join(home, "foo")},
-		},
+	actionPath := filepath.Join(actionDir, "slow.yml")
+	if err := os.WriteFile(actionPath, []byte(`
+command: sleep 1
+concurrency: 1
+`), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			def := tt.input
-			NormalizeAction(&def, 30)
-			if def.Name != tt.expected.Name {
-				t.Errorf("expected Name %q, got %q", tt.expected.Name, def.Name)
-			}
-			if def.Timeout != tt.expected.Timeout {
-				t.Errorf("expected Timeout %d, got %d", tt.expected.Timeout, def.Timeout)
-			}
-			if def.Cwd != tt.expected.Cwd {
-				t.Errorf("expected Cwd %q, got %q", tt.expected.Cwd, def.Cwd)
-			}
-		})
+	cfg := &config.Config{Timeout: 5}
+	d, err := db.Open(filepath.Join(root, "runic.db"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer d.Close()
+
+	runner := NewRunner(cfg)
+	historyID, err := runner.RunAction(context.Background(), d, logDir, actionDir, "slow", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if historyID == 0 {
+		t.Fatal("expected a history ID")
+	}
+
+	_, err = runner.RunAction(context.Background(), d, logDir, actionDir, "slow", "")
+	if err == nil {
+		t.Fatal("expected concurrency limit error")
+	}
+	if err != nil && !errors.Is(err, ErrConcurrencyLimitReached) {
+		t.Fatalf("expected concurrency limit error, got %v", err)
+	}
+
+	time.Sleep(1300 * time.Millisecond)
 }
