@@ -3,5 +3,4 @@
 *.db-wal
 logs/
 config.yml
-actions/
 bin/
