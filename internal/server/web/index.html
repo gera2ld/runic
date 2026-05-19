@@ -12,7 +12,7 @@
   <div id="app"></div>
 
   <script>
-    const { createApp, ref, onMounted, computed, watch } = Vue
+    const { createApp, ref, onMounted, onUnmounted, computed, watch } = Vue
     const { createRouter, createWebHistory, useRoute, useRouter } = VueRouter
 
     async function fetchJSON(url) {
@@ -45,18 +45,10 @@
       delimiters: ['[[', ']]'],
       template: `
         <div class="min-h-screen bg-gray-950 text-gray-100">
-          <nav class="border-b border-gray-800 px-6 py-4 flex items-center gap-2 text-sm">
-            <router-link to="/" class="text-xl font-bold text-emerald-400 mr-4">runic</router-link>
-            <span class="text-gray-700">/</span>
-            <router-link to="/actions" class="text-gray-400 hover:text-white">Actions</router-link>
-            <template v-if="actionCrumb">
-              <span class="text-gray-700">/</span>
-              <router-link :to="'/actions/' + actionCrumb" class="text-gray-400 hover:text-white">[[ actionCrumb ]]</router-link>
-            </template>
-            <template v-if="historyCrumb">
-              <span class="text-gray-700">/</span>
-              <router-link :to="'/actions/' + actionCrumb + '/history/' + historyCrumb" class="text-gray-400 hover:text-white">History #[[ historyCrumb ]]</router-link>
-            </template>
+          <nav class="border-b border-gray-800 px-6 flex items-center gap-1">
+            <router-link to="/" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'runic' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Runic</router-link>
+            <router-link to="/actions" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'actions' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Actions</router-link>
+            <router-link to="/executions" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'executions' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Executions</router-link>
           </nav>
           <main class="max-w-7xl mx-auto p-6"><slot></slot></main>
           <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-lg text-sm font-medium">[[ toast ]]</div>
@@ -64,9 +56,15 @@
       `,
       setup() {
         const route = useRoute()
-        const actionCrumb = computed(() => route.params.id || null)
-        const historyCrumb = computed(() => route.params.hid || null)
-        return { actionCrumb, historyCrumb }
+        const activeTab = computed(function() {
+          var p = route.path
+          if (p === '/') return 'runic'
+          if (p === '/executions') return 'executions'
+          if (p.match(/^\/actions\/[^/]+\/history/)) return 'executions'
+          if (p.match(/^\/actions\//)) return 'actions'
+          return 'actions'
+        })
+        return { activeTab }
       }
     }
 
@@ -75,7 +73,130 @@
       template: `
         <AppLayout :toast="toast" @toast="v => toast = v">
           <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-semibold">Recent Executions</h1>
+            <h1 class="text-2xl font-semibold">Overview</h1>
+            <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-gray-300">Recent Actions</h2>
+                <router-link to="/actions" class="text-xs text-emerald-400 hover:text-emerald-300">View all →</router-link>
+              </div>
+              <div v-if="actionLoading" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">Loading...</div>
+              <div v-else-if="recentActions.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">No actions yet.</div>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div v-for="a in recentActions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+                  <router-link :to="'/actions/' + a.id" class="font-mono text-emerald-400 hover:underline text-sm">[[ a.name || a.id ]]</router-link>
+                  <div class="text-[11px] text-gray-500 font-mono truncate mt-1">[[ a.command ]]</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-gray-300">Recent Executions</h2>
+                <router-link to="/executions" class="text-xs text-emerald-400 hover:text-emerald-300">View all →</router-link>
+              </div>
+              <div v-if="loading" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">Loading...</div>
+              <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">No executions yet.</div>
+              <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                    <tr>
+                      <th class="px-4 py-2 text-left w-16">ID</th>
+                      <th class="px-4 py-2 text-left">Action</th>
+                      <th class="px-4 py-2 text-left w-24">Status</th>
+                      <th class="px-4 py-2 text-left w-20">Duration</th>
+                      <th class="px-4 py-2 text-left w-20">Log</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-800/60">
+                    <tr v-for="e in history.slice(0, 5)" :key="e.id" class="hover:bg-gray-900/50 transition">
+                      <td class="px-4 py-2 font-mono text-gray-600">[[ e.id ]]</td>
+                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline text-xs">[[ e.action_id ]]</router-link></td>
+                      <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
+                      <td class="px-4 py-2 text-gray-400 text-xs">[[ formatMs(e.duration_ms) ]]</td>
+                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </AppLayout>
+      `,
+      components: { AppLayout },
+      setup() {
+        const history = ref([])
+        const loading = ref(true)
+        const actions = ref([])
+        const actionLoading = ref(true)
+        const toast = ref('')
+        const recentActions = computed(function() {
+          var h = history.value
+          if (!Array.isArray(h)) return []
+          var seen = {}
+          var result = []
+          for (var i = 0; i < h.length; i++) {
+            var aid = h[i].action_id
+            if (!seen[aid]) {
+              seen[aid] = true
+              for (var j = 0; j < actions.value.length; j++) {
+                if (actions.value[j].id === aid) {
+                  result.push(actions.value[j])
+                  break
+                }
+              }
+            }
+            if (result.length >= 4) break
+          }
+          return result
+        })
+        let pollTimer = null
+
+        async function refreshHistory() {
+          loading.value = true
+          try {
+            var h = await fetchJSON('/api/history')
+            history.value = Array.isArray(h) ? h : []
+          } catch (e) { console.error(e); history.value = [] }
+          loading.value = false
+        }
+
+        async function refreshActions() {
+          actionLoading.value = true
+          try {
+            var a = await fetchJSON('/api/actions')
+            actions.value = Array.isArray(a) ? a : []
+          } catch (e) { console.error(e); actions.value = [] }
+          actionLoading.value = false
+        }
+
+        function refresh() {
+          refreshHistory()
+          refreshActions()
+        }
+
+        onMounted(function() {
+          refresh()
+          pollTimer = setInterval(refreshHistory, 3000)
+        })
+
+        onUnmounted(function() {
+          if (pollTimer) clearInterval(pollTimer)
+        })
+
+        return { history, loading, actions, actionLoading, recentActions, toast, refresh, statusClass, formatMs, formatDate }
+      }
+    }
+
+    const ExecutionList = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout :toast="toast" @toast="v => toast = v">
+          <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold">Executions</h1>
             <div class="flex gap-2">
               <button @click="cleanLogs" :disabled="cleaning" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50">
                 [[ cleaning ? 'Cleaning...' : 'Clean Logs' ]]
@@ -83,7 +204,7 @@
               <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
             </div>
           </div>
-          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <div v-if="initialLoading" class="text-gray-600 text-sm">Loading...</div>
           <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">No executions yet.</div>
           <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
             <table class="w-full text-sm">
@@ -113,12 +234,12 @@
       `,
       components: { AppLayout },
       setup() {
-        const router = useRouter()
         const history = ref([])
-        const loading = ref(true)
+        const loading = ref(false)
+        const initialLoading = ref(true)
         const toast = ref('')
         const cleaning = ref(false)
-        let es = null
+        let pollTimer = null
 
         async function refresh() {
           loading.value = true
@@ -127,6 +248,7 @@
             history.value = Array.isArray(h) ? h : []
           } catch (e) { console.error(e); history.value = [] }
           loading.value = false
+          initialLoading.value = false
         }
 
         async function cleanLogs() {
@@ -141,19 +263,16 @@
           finally { cleaning.value = false }
         }
 
-        onMounted(() => {
+        onMounted(function() {
           refresh()
-          es = new EventSource('/api/events')
-          es.onmessage = (e) => {
-            try {
-              const msg = JSON.parse(e.data)
-              if (msg.type === 'action_end') refresh()
-            } catch (err) { console.error(err) }
-          }
-          es.onerror = () => { es.close() }
+          pollTimer = setInterval(refresh, 3000)
         })
 
-        return { history, loading, toast, cleaning, refresh, cleanLogs, statusClass, formatMs, formatDate }
+        onUnmounted(function() {
+          if (pollTimer) clearInterval(pollTimer)
+        })
+
+        return { history, loading, initialLoading, toast, cleaning, refresh, cleanLogs, statusClass, formatMs, formatDate }
       }
     }
 
@@ -194,11 +313,11 @@
         }
 
         async function trigger(id) {
-          await fetch(`/api/actions/${id}/trigger`, { method: 'POST' })
+          await fetch('/api/actions/' + id + '/trigger', { method: 'POST' })
           router.push('/')
         }
 
-        onMounted(() => { refresh() })
+        onMounted(function() { refresh() })
 
         return { actions, loading, trigger, formatTimeout }
       }
@@ -273,18 +392,19 @@
         const loading = ref(true)
         const p = ref(1)
         const perPage = 20
+        let pollTimer = null
 
         const filtered = computed(() => {
-          const h = history.value
+          var h = history.value
           if (!Array.isArray(h)) return []
-          const aid = route.params && route.params.id ? route.params.id : ''
+          var aid = route.params && route.params.id ? route.params.id : ''
           return h.filter(function(e) { return e.action_id === aid })
         })
         const tp = computed(function() {
           return Math.max(1, Math.ceil(filtered.value.length / perPage))
         })
         const paged = computed(function() {
-          const start = (p.value - 1) * perPage
+          var start = (p.value - 1) * perPage
           return filtered.value.slice(start, start + perPage)
         })
         const pr = computed(function() {
@@ -295,8 +415,14 @@
           return pages
         })
 
+        function hasRunning() {
+          for (var i = 0; i < filtered.value.length; i++) {
+            if (filtered.value[i].status === 'RUNNING') return true
+          }
+          return false
+        }
+
         async function refresh() {
-          loading.value = true
           try {
             var actions = await fetchJSON('/api/actions')
             actionDef.value = null
@@ -310,6 +436,14 @@
           loading.value = false
         }
 
+        function togglePolling() {
+          if (hasRunning()) {
+            if (!pollTimer) pollTimer = setInterval(refresh, 3000)
+          } else {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+          }
+        }
+
         async function trigger() {
           try {
             await fetch('/api/actions/' + route.params.id + '/trigger', { method: 'POST' })
@@ -317,12 +451,18 @@
           } catch (e) { console.error(e) }
         }
 
-        onMounted(function() { refresh() })
-        watch(function() { return route.params && route.params.id }, function() { p.value = 1; refresh() })
+        onMounted(function() { refresh().then(togglePolling) })
+        onUnmounted(function() { if (pollTimer) clearInterval(pollTimer) })
+        watch(function() { return route.params && route.params.id }, function() {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+          p.value = 1; loading.value = true; refresh().then(togglePolling)
+        })
+        watch(filtered, function() { togglePolling() })
 
         return { actionDef, filtered, paged, p, perPage, tp, pr, loading, trigger, statusClass, formatMs, formatDate }
       }
     }
+
     const LogView = {
       delimiters: ['[[', ']]'],
       template: `
@@ -345,20 +485,33 @@
         const entry = ref(null)
         const logContent = ref('')
         const loading = ref(true)
+        let pollTimer = null
 
-        onMounted(async function() {
+        async function refresh() {
           try {
             var hid = route.params && route.params.hid ? parseInt(route.params.hid) : 0
             var h = await fetchJSON('/api/history')
             if (Array.isArray(h)) {
               for (var i = 0; i < h.length; i++) {
-                if (h[i].id === hid) { entry.value = h[i]; break }
+                if (h[i].id === hid) {
+                  entry.value = h[i]
+                  break
+                }
               }
             }
             var lres = await fetch('/api/logs/' + hid)
             if (lres.ok) logContent.value = await lres.text()
           } catch (e) { console.error(e) }
           loading.value = false
+        }
+
+        onMounted(function() {
+          refresh()
+          pollTimer = setInterval(refresh, 3000)
+        })
+
+        onUnmounted(function() {
+          if (pollTimer) clearInterval(pollTimer)
         })
 
         return { entry, logContent, loading, statusClass, formatMs, formatDate }
@@ -370,6 +523,7 @@
       { path: '/actions', component: ActionList },
       { path: '/actions/:id', component: ActionDetail },
       { path: '/actions/:id/history/:hid', component: LogView },
+      { path: '/executions', component: ExecutionList },
     ]
 
     const router = createRouter({

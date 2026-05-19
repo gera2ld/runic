@@ -10,12 +10,12 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/gera2ld/runic/internal/config"
-	"github.com/gera2ld/runic/internal/db"
-	"github.com/gera2ld/runic/internal/executor"
-	"github.com/gera2ld/runic/internal/logmgr"
-	"github.com/gera2ld/runic/internal/sse"
+	"runic/internal/config"
+	"runic/internal/db"
+	"runic/internal/executor"
+	"runic/internal/logmgr"
 )
 
 //go:embed web/index.html
@@ -25,15 +25,13 @@ type Server struct {
 	cfg    *config.Config
 	db     *db.DB
 	runner *executor.Runner
-	broker *sse.Broker
 }
 
-func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, broker *sse.Broker) {
+func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
 	s := &Server{
 		cfg:    cfg,
 		db:     d,
 		runner: runner,
-		broker: broker,
 	}
 
 	os.MkdirAll(cfg.ActionDir, 0755)
@@ -41,7 +39,6 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, broker *sse.Br
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/api/events", s.broker.Handler())
 	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/logs/", s.handleLogs)
 	mux.HandleFunc("/api/actions/", s.handleActions)
@@ -49,7 +46,14 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, broker *sse.Br
 	mux.HandleFunc("/api/clean", s.handleClean)
 
 	fmt.Printf("[server] listening on :%s\n", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintf(os.Stderr, "[server] fatal: %v\n", err)
 		os.Exit(1)
 	}

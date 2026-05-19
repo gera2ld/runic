@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gera2ld/runic/internal/config"
-	"github.com/gera2ld/runic/internal/db"
-	"github.com/gera2ld/runic/internal/logmgr"
-	"github.com/gera2ld/runic/internal/sse"
+	"runic/internal/config"
+	"runic/internal/db"
+	"runic/internal/logmgr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,12 +23,11 @@ type ActionDef struct {
 }
 
 type Runner struct {
-	cfg    *config.Config
-	broker *sse.Broker
+	cfg *config.Config
 }
 
-func NewRunner(cfg *config.Config, broker *sse.Broker) *Runner {
-	return &Runner{cfg: cfg, broker: broker}
+func NewRunner(cfg *config.Config) *Runner {
+	return &Runner{cfg: cfg}
 }
 
 func LoadAction(actionDir, actionID string) (*ActionDef, error) {
@@ -78,20 +76,9 @@ func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionDir, act
 
 	go func() {
 		defer sl.Close()
-		r.broker.Broadcast(sse.Event{Type: "action_start", Payload: map[string]interface{}{
-			"history_id": historyID,
-			"action_id":  actionID,
-		}})
 		result := r.runCommand(ctx, def, sl, payload, actionID)
 		result.HistoryID = historyID
 		d.UpdateHistory(result.HistoryID, result.Status, result.Duration)
-		r.broker.Broadcast(sse.Event{Type: "action_end", Payload: map[string]interface{}{
-			"history_id": result.HistoryID,
-			"action_id":  result.ActionID,
-			"status":     result.Status,
-			"exit_code":  result.ExitCode,
-			"duration":   result.Duration,
-		}})
 		fmt.Printf("[executor] action=%s status=%s duration=%dms exit_code=%d\n",
 			actionID, result.Status, result.Duration, result.ExitCode)
 	}()
