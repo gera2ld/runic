@@ -26,7 +26,6 @@ const binDir = "bin"
 var args = [][]string{
 	{"darwin", "amd64"},
 	{"darwin", "arm64"},
-	{"windows", "amd64"},
 	{"linux", "amd64"},
 	{"linux", "arm64"},
 }
@@ -63,13 +62,9 @@ func build() BuildResult {
 	for _, item := range args {
 		buildOs := item[0]
 		buildArch := item[1]
-		suffix := ""
-		if buildOs == "windows" {
-			suffix = ".exe"
-		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		log.Printf("Build os=%s, arch=%s\n", buildOs, buildArch)
-		name := "runic-" + buildOs + "-" + buildArch + suffix
+		name := "runic-" + buildOs + "-" + buildArch
 		cmd := exec.Command(
 			"go",
 			"build",
