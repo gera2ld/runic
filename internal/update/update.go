@@ -102,11 +102,57 @@ func Install() error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(exePath)
-	if err := os.Rename(tmpPath, filepath.Join(dir, filepath.Base(exePath))); err != nil {
+	if err := replaceBinary(tmpPath, exePath); err != nil {
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	fmt.Println("Updated successfully")
 	return nil
+}
+
+func replaceBinary(src, dst string) error {
+	// Try atomic rename first
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
+	}
+
+	// Fallback to copy for cross-device or other errors
+	sf, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+
+	// Create temp file in the same directory as the destination
+	// to ensure we can rename it atomically.
+	df, err := os.CreateTemp(filepath.Dir(dst), "runic-update-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := df.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.Copy(df, sf); err != nil {
+		df.Close()
+		return err
+	}
+
+	if err := df.Close(); err != nil {
+		return err
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, info.Mode()); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, dst); err != nil {
+		return err
+	}
+
+	return os.Remove(src)
 }
