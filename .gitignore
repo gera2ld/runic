@@ -1,0 +1,8 @@
+runic
+runic-*
+*.db
+*.db-shm
+*.db-wal
+logs/
+config.yml
+actions/
