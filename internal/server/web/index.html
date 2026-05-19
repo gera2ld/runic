@@ -45,11 +45,18 @@
       delimiters: ['[[', ']]'],
       template: `
         <div class="min-h-screen bg-gray-950 text-gray-100">
-          <nav class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
-            <router-link to="/" class="text-xl font-bold text-emerald-400">runic</router-link>
-            <router-link to="/actions" class="text-gray-400 hover:text-white text-sm">Actions</router-link>
-            <router-link v-if="actionCrumb" :to="'/actions/' + actionCrumb" class="text-gray-400 hover:text-white text-sm">[[ actionCrumb ]]</router-link>
-            <router-link v-if="logCrumb" :to="'/actions/' + actionCrumb + '/logs/' + logCrumb" class="text-gray-400 hover:text-white text-sm">Log #[[ logCrumb ]]</router-link>
+          <nav class="border-b border-gray-800 px-6 py-4 flex items-center gap-2 text-sm">
+            <router-link to="/" class="text-xl font-bold text-emerald-400 mr-4">runic</router-link>
+            <span class="text-gray-700">/</span>
+            <router-link to="/actions" class="text-gray-400 hover:text-white">Actions</router-link>
+            <template v-if="actionCrumb">
+              <span class="text-gray-700">/</span>
+              <router-link :to="'/actions/' + actionCrumb" class="text-gray-400 hover:text-white">[[ actionCrumb ]]</router-link>
+            </template>
+            <template v-if="historyCrumb">
+              <span class="text-gray-700">/</span>
+              <router-link :to="'/actions/' + actionCrumb + '/history/' + historyCrumb" class="text-gray-400 hover:text-white">History #[[ historyCrumb ]]</router-link>
+            </template>
           </nav>
           <main class="max-w-7xl mx-auto p-6"><slot></slot></main>
           <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-lg text-sm font-medium">[[ toast ]]</div>
@@ -58,8 +65,8 @@
       setup() {
         const route = useRoute()
         const actionCrumb = computed(() => route.params.id || null)
-        const logCrumb = computed(() => route.params.hid || null)
-        return { actionCrumb, logCrumb }
+        const historyCrumb = computed(() => route.params.hid || null)
+        return { actionCrumb, historyCrumb }
       }
     }
 
@@ -97,7 +104,7 @@
                   <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
                   <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
                   <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/logs/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                 </tr>
               </tbody>
             </table>
@@ -240,7 +247,7 @@
                       <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
                       <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
                       <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/logs/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
                 </table>
@@ -362,7 +369,7 @@
       { path: '/', component: Dashboard },
       { path: '/actions', component: ActionList },
       { path: '/actions/:id', component: ActionDetail },
-      { path: '/actions/:id/logs/:hid', component: LogView },
+      { path: '/actions/:id/history/:hid', component: LogView },
     ]
 
     const router = createRouter({
