@@ -374,16 +374,21 @@
           <template v-else>
             <div v-if="actionDef" class="mb-8 bg-gray-900 border border-gray-800 rounded-lg p-6">
               <div class="flex items-center justify-between mb-4">
-                <h1 class="text-xl font-semibold text-emerald-400">[[ actionDef.name ]]</h1>
+                <div class="flex items-center gap-3 min-w-0">
+                  <h1 class="text-xl font-semibold text-emerald-400 truncate">[[ actionDef.name ]]</h1>
+                  <div class="flex flex-wrap gap-1.5">
+                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ formatTimeout(actionDef.timeout) ]]</span>
+                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ actionDef.concurrency === 0 ? '∞' : 'x' + actionDef.concurrency ]]</span>
+                    <span v-if="actionDef.cron" class="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded font-mono">Cron</span>
+                  </div>
+                </div>
                 <button @click="trigger" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Run</button>
               </div>
               <div class="space-y-2 text-sm font-mono text-gray-400">
                 <div><span class="text-gray-600">ID:</span> [[ actionDef.id ]]</div>
-                <div><span class="text-gray-600">Timeout:</span> [[ actionDef.timeout ]]s</div>
-                <div><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
                 <div v-if="actionDef.cron"><span class="text-gray-600">Cron:</span> <span class="text-blue-400">[[ actionDef.cron ]]</span></div>
                 <div v-if="actionDef.next_run"><span class="text-gray-600">Next run:</span> <span class="text-gray-300">[[ formatDate(actionDef.next_run) ]]</span></div>
-                <div><span class="text-gray-600">Concurrency:</span> [[ actionDef.concurrency === 0 ? 'unlimited' : actionDef.concurrency ]]</div>
+                <div><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
               </div>
               <div class="mt-4">
                 <span class="text-gray-600 text-sm">Command:</span>
@@ -515,7 +520,7 @@
         })
         watch(filtered, function() { togglePolling() })
 
-        return { actionDef, filtered, paged, p, perPage, tp, pr, loading, trigger, statusClass, formatMs, formatDate }
+        return { actionDef, filtered, paged, p, perPage, tp, pr, loading, trigger, statusClass, formatMs, formatDate, formatTimeout }
       }
     }
 
