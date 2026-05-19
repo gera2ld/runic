@@ -1,0 +1,20 @@
+# Server binding
+host: 127.0.0.1
+port: 1337
+
+# Data directory (relative or absolute path)
+# If not set, defaults to the current working directory
+# db, logs, and actions are created under this path
+data_dir: .
+
+# Global action timeout in seconds (per-action timeout overrides this)
+timeout: 10
+
+# Environment variables injected into all action commands
+env:
+  PATH: /usr/local/bin:/usr/bin:/bin
+  LANG: en_US.UTF-8
+
+# Log cleanup settings
+clean_days: 30   # Delete history records older than N days
+max_log_num: 100 # Keep at most N most recent log files

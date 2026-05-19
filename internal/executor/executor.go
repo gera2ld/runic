@@ -30,6 +30,18 @@ func NewRunner(cfg *config.Config) *Runner {
 	return &Runner{cfg: cfg}
 }
 
+func NormalizeAction(def *ActionDef, defaultTimeout int) {
+	if def.Name == "" {
+		def.Name = def.ID
+	}
+	if def.Timeout <= 0 {
+		def.Timeout = defaultTimeout
+	}
+	if def.Cwd == "" {
+		def.Cwd = "."
+	}
+}
+
 func LoadAction(actionDir, actionID string) (*ActionDef, error) {
 	data, err := os.ReadFile(actionDir + "/" + actionID + ".yml")
 	if err != nil {
@@ -43,9 +55,6 @@ func LoadAction(actionDir, actionID string) (*ActionDef, error) {
 		return nil, fmt.Errorf("action %q has no command", actionID)
 	}
 	def.ID = actionID
-	if def.Name == "" {
-		def.Name = actionID
-	}
 	return &def, nil
 }
 
@@ -145,7 +154,7 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 	}
 }
 
-func ListActions(actionDir string) ([]ActionDef, error) {
+func ListActions(actionDir string, defaultTimeout int) ([]ActionDef, error) {
 	entries, err := os.ReadDir(actionDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -164,6 +173,7 @@ func ListActions(actionDir string) ([]ActionDef, error) {
 		if err != nil {
 			continue
 		}
+		NormalizeAction(def, defaultTimeout)
 		actions = append(actions, *def)
 	}
 	return actions, nil

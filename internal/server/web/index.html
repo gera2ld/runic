@@ -35,7 +35,6 @@
     }
 
     function formatTimeout(seconds) {
-      if (!seconds) return '5m'
       return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm'
     }
 
@@ -336,8 +335,8 @@
               </div>
               <div class="space-y-2 text-sm font-mono text-gray-400">
                 <div><span class="text-gray-600">ID:</span> [[ actionDef.id ]]</div>
-                <div><span class="text-gray-600">Timeout:</span> [[ actionDef.timeout || 300 ]]s</div>
-                <div v-if="actionDef.cwd"><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
+                <div><span class="text-gray-600">Timeout:</span> [[ actionDef.timeout ]]s</div>
+                <div><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
               </div>
               <div class="mt-4">
                 <span class="text-gray-600 text-sm">Command:</span>

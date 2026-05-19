@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	Host    string            `yaml:"host"`
 	Port    string            `yaml:"port"`
 	Env     map[string]string `yaml:"env"`
 	Timeout int               `yaml:"timeout"`
@@ -21,7 +22,7 @@ type Config struct {
 
 func Load(path string) (*Config, error) {
 	cfg := &Config{
-		Timeout:   300,
+		Timeout:   10,
 		Env:       make(map[string]string),
 		CleanDays: 30,
 		MaxLogNum: 100,
@@ -43,6 +44,13 @@ func Load(path string) (*Config, error) {
 			cfg.Port = "1337"
 		}
 	}
+	if cfg.Host == "" {
+		if h := os.Getenv("RUNIC_HOST"); h != "" {
+			cfg.Host = h
+		} else {
+			cfg.Host = "127.0.0.1"
+		}
+	}
 	if cfg.DataDir == "" {
 		cfg.DataDir = os.Getenv("RUNIC_DATA_DIR")
 	}
@@ -50,7 +58,7 @@ func Load(path string) (*Config, error) {
 		cfg.DataDir = "."
 	}
 	if cfg.Timeout <= 0 {
-		cfg.Timeout = 300
+		cfg.Timeout = 10
 	}
 
 	cfg.DBPath = filepath.Join(cfg.DataDir, "runic.db")

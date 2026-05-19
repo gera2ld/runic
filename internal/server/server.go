@@ -45,9 +45,9 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB) {
 	mux.HandleFunc("/api/actions", s.handleActions)
 	mux.HandleFunc("/api/clean", s.handleClean)
 
-	fmt.Printf("[server] listening on :%s\n", cfg.Port)
+	fmt.Printf("[server] listening on %s:%s\n", cfg.Host, cfg.Port)
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         cfg.Host + ":" + cfg.Port,
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -173,15 +173,10 @@ func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID 
 }
 
 func (s *Server) listActions(w http.ResponseWriter, r *http.Request) {
-	actions, err := executor.ListActions(s.cfg.ActionDir)
+	actions, err := executor.ListActions(s.cfg.ActionDir, s.cfg.Timeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-	for i := range actions {
-		if actions[i].Timeout <= 0 {
-			actions[i].Timeout = s.cfg.Timeout
-		}
 	}
 	if actions == nil {
 		actions = []executor.ActionDef{}
