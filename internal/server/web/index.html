@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>runic</title>
+  <title>Runic</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -70,6 +70,14 @@
         },
       },
     }
+  </script>
+  <script>
+    const primaryColor = '#34d399'
+    // Explicit fill so favicon renders in the correct color (currentColor resolves to page text in the data URI context)
+    const boltIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="' + primaryColor + '"><path d="M11 21h-1l1-7H6.74S10.42 7.54 13 3h1l-1 7h4.28z"/></svg>'
+    const link = document.querySelector('link[rel="icon"]') || Object.assign(document.createElement('link'), { rel: 'icon' })
+    link.href = 'data:image/svg+xml,' + encodeURIComponent(boltIcon)
+    document.head.appendChild(link)
   </script>
 </head>
 <body class="bg-page text-body min-h-screen">
@@ -150,7 +158,10 @@
       template: `
         <div class="min-h-screen bg-page text-body">
           <nav class="px-6 flex items-center gap-1">
-            <router-link to="/" class="text-base px-4 py-3 font-bold text-body">Runic</router-link>
+            <router-link to="/" class="text-base px-4 py-3 font-bold text-body flex items-center gap-1.5">
+              <span v-html="boltIcon"></span>
+              Runic
+            </router-link>
             <router-link v-for="t in tabs" :key="t.key" :to="t.to" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === t.key ? 'border-primary text-body font-medium' : 'border-transparent text-muted hover:text-body'">[[ t.label ]]</router-link>
           </nav>
           <main class="max-w-7xl mx-auto p-6"><slot></slot></main>
@@ -167,7 +178,7 @@
         const activeTab = computed(function() {
           return route.path.split('/')[1]
         })
-        return { activeTab, tabs }
+        return { activeTab, tabs, boltIcon }
       }
     }
 
