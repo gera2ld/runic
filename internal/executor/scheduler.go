@@ -59,7 +59,7 @@ func (s *Scheduler) syncLoop() {
 }
 
 func (s *Scheduler) Sync() error {
-	actions, err := ListActions(s.actionDir, s.runner.cfg.Timeout)
+	actions, err := ListActions(s.actionDir, s.runner.cfg.Timeout, s.db)
 	if err != nil {
 		return err
 	}

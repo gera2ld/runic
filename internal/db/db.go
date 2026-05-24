@@ -145,6 +145,21 @@ func (db *DB) GetHistoryByIDs(ids []int64) ([]HistoryEntry, error) {
 	return entries, nil
 }
 
+func (db *DB) GetLatestHistoryByActionID(actionID string) (*HistoryEntry, error) {
+	var e HistoryEntry
+	err := db.QueryRow(
+		"SELECT id, action_id, status, duration_ms, log_file_path, created_at FROM history WHERE action_id = ? ORDER BY id DESC LIMIT 1",
+		actionID,
+	).Scan(&e.ID, &e.ActionID, &e.Status, &e.DurationMs, &e.LogFilePath, &e.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
 func (db *DB) DeleteHistoryBefore(t time.Time) (int64, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()

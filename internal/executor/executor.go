@@ -26,6 +26,8 @@ type ActionDef struct {
 	Cron        string     `yaml:"cron" json:"cron"`
 	Concurrency *int       `yaml:"concurrency" json:"concurrency"`
 	NextRun     *time.Time `yaml:"-" json:"next_run,omitempty"`
+	LastRun     *time.Time `yaml:"-" json:"last_run,omitempty"`
+	LastRunStatus string   `yaml:"-" json:"last_run_status,omitempty"`
 }
 
 type Runner struct {
@@ -207,7 +209,7 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 	}
 }
 
-func ListActions(actionDir string, defaultTimeout int) ([]ActionDef, error) {
+func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
 	entries, err := os.ReadDir(actionDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -232,6 +234,13 @@ func ListActions(actionDir string, defaultTimeout int) ([]ActionDef, error) {
 			if schedule, err := cron.ParseStandard(def.Cron); err == nil {
 				nextRun := schedule.Next(time.Now())
 				def.NextRun = &nextRun
+			}
+		}
+		if d != nil {
+			lastRun, err := d.GetLatestHistoryByActionID(id)
+			if err == nil && lastRun != nil {
+				def.LastRun = &lastRun.CreatedAt
+				def.LastRunStatus = lastRun.Status
 			}
 		}
 		actions = append(actions, *def)

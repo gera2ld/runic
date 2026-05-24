@@ -203,7 +203,7 @@ func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID 
 }
 
 func (s *Server) listActions(w http.ResponseWriter, r *http.Request) {
-	actions, err := executor.ListActions(s.cfg.ActionDir, s.cfg.Timeout)
+	actions, err := executor.ListActions(s.cfg.ActionDir, s.cfg.Timeout, s.db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
