@@ -24,7 +24,7 @@ concurrency: 0
 		t.Fatal(err)
 	}
 
-	actions, err := ListActions(dir, 10)
+	actions, err := ListActions(dir, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

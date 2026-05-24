@@ -7,13 +7,81 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --page: 3, 7, 18;
+      --surface: 17, 24, 39;
+      --elevated: 31, 41, 55;
+      --subtle: 55, 65, 81;
+      --primary: 52, 211, 153;
+      --primary-solid: 5, 150, 105;
+      --primary-hover: 16, 185, 129;
+      --primary-border: 16, 185, 129;
+      --accent: 96, 165, 250;
+      --accent-dim: 147, 197, 253;
+      --body: 243, 244, 246;
+      --subdued: 209, 213, 219;
+      --muted: 156, 163, 175;
+      --dim: 107, 114, 128;
+      --faint: 75, 85, 99;
+      --line: 31, 41, 55;
+      --line-muted: 55, 65, 81;
+      --rule: 31, 41, 55;
+      --success: 5, 150, 105;
+      --running: 202, 138, 4;
+      --failed: 220, 38, 38;
+      --timeout: 234, 88, 12;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            page: 'rgba(var(--page), <alpha-value>)',
+            surface: 'rgba(var(--surface), <alpha-value>)',
+            elevated: 'rgba(var(--elevated), <alpha-value>)',
+            subtle: 'rgba(var(--subtle), <alpha-value>)',
+            primary: {
+              DEFAULT: 'rgba(var(--primary), <alpha-value>)',
+              solid: 'rgba(var(--primary-solid), <alpha-value>)',
+              hover: 'rgba(var(--primary-hover), <alpha-value>)',
+              border: 'rgba(var(--primary-border), <alpha-value>)',
+            },
+            accent: {
+              DEFAULT: 'rgba(var(--accent), <alpha-value>)',
+              dim: 'rgba(var(--accent-dim), <alpha-value>)',
+            },
+            body: 'rgba(var(--body), <alpha-value>)',
+            subdued: 'rgba(var(--subdued), <alpha-value>)',
+            muted: 'rgba(var(--muted), <alpha-value>)',
+            dim: 'rgba(var(--dim), <alpha-value>)',
+            faint: 'rgba(var(--faint), <alpha-value>)',
+            line: 'rgba(var(--line), <alpha-value>)',
+            'line-muted': 'rgba(var(--line-muted), <alpha-value>)',
+            rule: 'rgba(var(--rule), <alpha-value>)',
+            status: {
+              success: 'rgba(var(--success), <alpha-value>)',
+              running: 'rgba(var(--running), <alpha-value>)',
+              failed: 'rgba(var(--failed), <alpha-value>)',
+              timeout: 'rgba(var(--timeout), <alpha-value>)',
+            },
+          },
+        },
+      },
+    }
+  </script>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
+<body class="bg-page text-body min-h-screen">
   <div id="app"></div>
 
   <script>
     const { createApp, ref, onMounted, onUnmounted, computed, watch } = Vue
     const { createRouter, createWebHistory, useRoute, useRouter } = VueRouter
+
+    const MAX_HISTORY = 500
+    const PER_PAGE = 20
+    const MAX_VISIBLE_PAGES = 5
 
     async function fetchJSON(url) {
       const res = await fetch(url)
@@ -22,10 +90,10 @@
     }
 
     function statusClass(s) {
-      return { RUNNING: 'bg-yellow-600', SUCCESS: 'bg-emerald-600', FAILED: 'bg-red-600', TIMEOUT: 'bg-orange-600' }[s] || 'bg-gray-600'
+      return { RUNNING: 'bg-status-running', SUCCESS: 'bg-status-success', FAILED: 'bg-status-failed', TIMEOUT: 'bg-status-timeout' }[s] || 'bg-faint'
     }
     function statusTextClass(s) {
-      return { RUNNING: 'text-yellow-400', SUCCESS: 'text-emerald-400', FAILED: 'text-red-400', TIMEOUT: 'text-orange-400' }[s] || 'text-gray-400'
+      return { RUNNING: 'text-status-running', SUCCESS: 'text-status-success', FAILED: 'text-status-failed', TIMEOUT: 'text-status-timeout' }[s] || 'text-muted'
     }
 
     function formatMs(ms) {
@@ -68,7 +136,7 @@
         if (!found) res.push(u)
       }
       res.sort((a, b) => b.id - a.id)
-      return res.slice(0, 100)
+      return res.slice(0, MAX_HISTORY)
     }
 
     function formatTimeout(seconds) {
@@ -80,27 +148,58 @@
       emits: ['toast'],
       delimiters: ['[[', ']]'],
       template: `
-        <div class="min-h-screen bg-gray-950 text-gray-100">
-          <nav class="border-b border-gray-800 px-6 flex items-center gap-1">
-            <router-link to="/" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'runic' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Runic</router-link>
-            <router-link to="/actions" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'actions' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Actions</router-link>
-            <router-link to="/executions" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'executions' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">Executions</router-link>
-            <router-link to="/system" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === 'system' ? 'border-emerald-500 text-white font-medium' : 'border-transparent text-gray-400 hover:text-white'">System</router-link>
+        <div class="min-h-screen bg-page text-body">
+          <nav class="px-6 flex items-center gap-1">
+            <router-link to="/" class="text-base px-4 py-3 font-bold text-body">Runic</router-link>
+            <router-link v-for="t in tabs" :key="t.key" :to="t.to" class="text-sm px-3 py-3 transition border-b-2" :class="activeTab === t.key ? 'border-primary text-body font-medium' : 'border-transparent text-muted hover:text-body'">[[ t.label ]]</router-link>
           </nav>
           <main class="max-w-7xl mx-auto p-6"><slot></slot></main>
-          <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-lg text-sm font-medium">[[ toast ]]</div>
+          <div v-if="toast" class="fixed bottom-6 right-6 z-50 px-4 py-3 bg-primary-solid text-body rounded-lg shadow-lg text-sm font-medium">[[ toast ]]</div>
         </div>
       `,
       setup() {
         const route = useRoute()
+        const tabs = [
+          { key: 'actions', label: 'Actions', to: '/actions' },
+          { key: 'executions', label: 'Executions', to: '/executions' },
+          { key: 'system', label: 'System', to: '/system' },
+        ]
         const activeTab = computed(function() {
-          var seg = route.path.split('/')[1]
-          if (!seg) return 'runic'
-          if (seg === 'actions') return 'actions'
-          if (seg === 'executions') return 'executions'
-          if (seg === 'system') return 'system'
+          return route.path.split('/')[1]
         })
-        return { activeTab }
+        return { activeTab, tabs }
+      }
+    }
+
+    const ActionCard = {
+      props: ['action'],
+      delimiters: ['[[', ']]'],
+      template: `
+        <div class="bg-surface border border-line rounded-lg p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <router-link :to="'/actions/' + action.id" class="font-semibold text-primary hover:underline truncate">[[ action.name || action.id ]]</router-link>
+            <div class="flex gap-1 shrink-0">
+              <span v-if="action.cron" class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono" :title="'Cron: ' + action.cron">Cron</span>
+              <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono" :title="'Concurrency: ' + (action.concurrency === 0 ? 'unlimited' : action.concurrency)">[[ action.concurrency === 0 ? '\u221e' : 'x' + action.concurrency ]]</span>
+              <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono">[[ formatTimeout(action.timeout) ]]</span>
+            </div>
+          </div>
+          <div v-if="action.next_run" class="text-[11px] text-muted mb-1">Next run: <span class="text-subdued">[[ formatDate(action.next_run) ]]</span></div>
+          <div class="text-[11px] text-dim mb-3">Last run: <span class="text-muted" :title="formatDate(action.last_run)">[[ lastRunLabel(action) ]]</span> <span v-if="action.last_run_status" :class="statusTextClass(action.last_run_status)" class="font-medium">[[ action.last_run_status ]]</span></div>
+          <button @click="trigger(action.id)" class="w-full px-3 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded text-xs text-primary font-medium transition mt-auto">Run</button>
+        </div>
+      `,
+      setup() {
+        const router = useRouter()
+        function lastRunLabel(a) {
+          return a && a.last_run ? timeAgo(a.last_run) : '-'
+        }
+        async function trigger(id) {
+          const res = await fetch('/api/actions/' + id + '/trigger', { method: 'POST' })
+          if (!res.ok) throw new Error(await res.text())
+          router.push('/')
+        }
+        return { lastRunLabel, trigger, formatTimeout, formatDate, statusTextClass }
       }
     }
 
@@ -110,36 +209,32 @@
         <AppLayout :toast="toast" @toast="v => toast = v">
           <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-semibold">Overview</h1>
-            <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
+            <button @click="refresh" class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Refresh</button>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div>
               <div class="flex items-center justify-between mb-3">
-                <h2 class="text-lg font-semibold text-gray-300">Recent Actions</h2>
-                <router-link to="/actions" class="text-xs text-emerald-400 hover:text-emerald-300">View all →</router-link>
+                <h2 class="text-lg font-semibold text-subdued">Recent Actions</h2>
+                <router-link to="/actions" class="text-xs text-primary hover:text-primary">View all →</router-link>
               </div>
-              <div v-if="actionLoading" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">Loading...</div>
-              <div v-else-if="recentActions.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">No actions yet.</div>
-              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div v-for="a in recentActions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-3">
-                  <router-link :to="'/actions/' + a.id" class="font-mono text-emerald-400 hover:underline text-sm">[[ a.name || a.id ]]</router-link>
-                  <div class="text-[11px] text-gray-500 font-mono truncate mt-1">[[ a.command ]]</div>
-                  <div v-if="a.next_run" class="text-[11px] text-gray-400 mt-2">Next run: <span class="text-gray-300">[[ formatDate(a.next_run) ]]</span></div>
-                </div>
+              <div v-if="actionLoading" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center">Loading...</div>
+              <div v-else-if="recentActions.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center">No actions yet.</div>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <ActionCard v-for="a in recentActions" :key="a.id" :action="a" />
               </div>
             </div>
 
             <div>
               <div class="flex items-center justify-between mb-3">
-                <h2 class="text-lg font-semibold text-gray-300">Recent Executions</h2>
-                <router-link to="/executions" class="text-xs text-emerald-400 hover:text-emerald-300">View all →</router-link>
+                <h2 class="text-lg font-semibold text-subdued">Recent Executions</h2>
+                <router-link to="/executions" class="text-xs text-primary hover:text-primary">View all →</router-link>
               </div>
-              <div v-if="loading" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">Loading...</div>
-              <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-6 text-center">No executions yet.</div>
-              <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
+              <div v-if="loading" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center">Loading...</div>
+              <div v-else-if="history.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center">No executions yet.</div>
+              <div v-else class="overflow-x-auto rounded-lg border border-line">
                 <table class="w-full text-sm">
-                  <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                  <thead class="bg-surface text-muted uppercase text-xs">
                     <tr>
                       <th class="px-4 py-2 text-left w-16">ID</th>
                       <th class="px-4 py-2 text-left">Action</th>
@@ -148,13 +243,13 @@
                       <th class="px-4 py-2 text-left w-20">Log</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-800/60">
-                    <tr v-for="e in history.slice(0, 5)" :key="e.id" class="hover:bg-gray-900/50 transition">
-                      <td class="px-4 py-2 font-mono text-gray-600">[[ e.id ]]</td>
-                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline text-xs">[[ e.action_id ]]</router-link></td>
-                      <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
-                      <td class="px-4 py-2 text-gray-500 text-xs">[[ formatDate(e.created_at) ]]</td>
-                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                  <tbody class="divide-y divide-rule">
+                    <tr v-for="e in history.slice(0, 5)" :key="e.id" class="hover:bg-surface/50 transition">
+                      <td class="px-4 py-2 font-mono text-faint">[[ e.id ]]</td>
+                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id" class="font-mono text-primary hover:underline text-xs">[[ e.action_id ]]</router-link></td>
+                      <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                       <td class="px-4 py-2 text-dim text-xs" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
                 </table>
@@ -163,7 +258,7 @@
           </div>
         </AppLayout>
       `,
-      components: { AppLayout },
+      components: { AppLayout, ActionCard },
       setup() {
         const history = ref([])
         const loading = ref(true)
@@ -233,7 +328,7 @@
           if (pollTimer) clearInterval(pollTimer)
         })
 
-        return { history, loading, actions, actionLoading, recentActions, toast, refresh, statusClass, formatMs, formatDate }
+        return { history, loading, actions, actionLoading, recentActions, toast, refresh, statusClass, formatMs, formatDate, timeAgo }
       }
     }
 
@@ -244,37 +339,45 @@
           <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-semibold">Executions</h1>
             <div class="flex gap-2">
-              <button @click="cleanLogs" :disabled="cleaning" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50">
+              <button @click="cleanLogs" :disabled="cleaning" class="px-3 py-1.5 bg-elevated hover:bg-subtle border border-line-muted rounded-lg text-sm font-medium transition disabled:opacity-50">
                 [[ cleaning ? 'Cleaning...' : 'Clean Logs' ]]
               </button>
-              <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
+              <button @click="refresh" class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Refresh</button>
             </div>
           </div>
-          <div v-if="initialLoading" class="text-gray-600 text-sm">Loading...</div>
-          <div v-else-if="history.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">No executions yet.</div>
-          <div v-else class="overflow-x-auto rounded-lg border border-gray-800">
+          <div v-if="initialLoading" class="text-faint text-sm">Loading...</div>
+          <div v-else-if="history.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
+          <div v-else class="overflow-x-auto rounded-lg border border-line">
             <table class="w-full text-sm">
-              <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+              <thead class="bg-surface text-muted uppercase text-xs">
                 <tr>
                   <th class="px-4 py-3 text-left w-16">ID</th>
                   <th class="px-4 py-3 text-left">Action</th>
                   <th class="px-4 py-3 text-left w-28">Status</th>
                   <th class="px-4 py-3 text-left w-24">Duration</th>
-                  <th class="px-4 py-3 text-left w-48">Time</th>
+                  <th class="px-4 py-3 text-left w-48">Started</th>
                   <th class="px-4 py-3 text-left w-20">Log</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-gray-800/60">
-                <tr v-for="e in history" :key="e.id" class="hover:bg-gray-900/50 transition">
-                  <td class="px-4 py-3 font-mono text-gray-600">[[ e.id ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline">[[ e.action_id ]]</router-link></td>
-                  <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
-                  <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
-                  <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+              <tbody class="divide-y divide-rule">
+                <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
+                  <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id" class="font-mono text-primary hover:underline">[[ e.action_id ]]</router-link></td>
+                  <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                  <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
+                  <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-muted">
+            <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, history.length) ]] of [[ history.length ]]</span>
+            <div class="flex gap-2">
+              <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
+              <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
+              <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
+            </div>
           </div>
         </AppLayout>
       `,
@@ -285,6 +388,23 @@
         const initialLoading = ref(true)
         const toast = ref('')
         const cleaning = ref(false)
+        const p = ref(1)
+        const perPage = PER_PAGE
+        const tp = computed(function() {
+          return Math.max(1, Math.ceil(history.value.length / perPage))
+        })
+        const paged = computed(function() {
+          var start = (p.value - 1) * perPage
+          return history.value.slice(start, start + perPage)
+        })
+        const pr = computed(function() {
+          var pages = []
+          var start = Math.max(1, p.value - Math.floor(MAX_VISIBLE_PAGES / 2))
+          var end = Math.min(tp.value, start + (MAX_VISIBLE_PAGES - 1))
+          start = Math.max(1, end - (MAX_VISIBLE_PAGES - 1))
+          for (var i = start; i <= end; i++) pages.push(i)
+          return pages
+        })
         let pollTimer = null
 
         async function refresh() {
@@ -295,6 +415,7 @@
           } catch (e) { console.error(e); history.value = [] }
           loading.value = false
           initialLoading.value = false
+          p.value = 1
         }
 
         async function poll() {
@@ -303,6 +424,7 @@
           try {
             var h = await fetchJSON(url)
             history.value = patchHistory(history.value, h)
+            if (p.value > tp.value) p.value = 1
           } catch (e) { console.error(e) }
         }
 
@@ -327,7 +449,7 @@
           if (pollTimer) clearInterval(pollTimer)
         })
 
-        return { history, loading, initialLoading, toast, cleaning, refresh, cleanLogs, statusClass, formatMs, formatDate }
+        return { history, loading, initialLoading, toast, cleaning, refresh, cleanLogs, statusClass, formatMs, formatDate, timeAgo, p, perPage, tp, paged, pr }
       }
     }
 
@@ -336,36 +458,19 @@
       template: `
         <AppLayout>
           <h1 class="text-2xl font-semibold mb-6">Actions</h1>
-          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
-          <div v-else-if="actions.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">
-            No actions found. Place YAML files in <code class="text-emerald-400">actions/&lt;id&gt;.yml</code>
+          <div v-if="loading" class="text-faint text-sm">Loading...</div>
+          <div v-else-if="actions.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">
+            No actions found. Place YAML files in <code class="text-primary">actions/&lt;id&gt;.yml</code>
           </div>
           <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <div v-for="a in actions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col">
-              <div class="flex items-center justify-between mb-2">
-                <router-link :to="'/actions/' + a.id" class="font-semibold text-emerald-400 hover:underline truncate">[[ a.name || a.id ]]</router-link>
-                <div class="flex gap-1 shrink-0">
-                  <span v-if="a.cron" class="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded font-mono" :title="'Cron: ' + a.cron">Cron</span>
-                  <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono" :title="'Concurrency: ' + (a.concurrency === 0 ? 'unlimited' : a.concurrency)">[[ a.concurrency === 0 ? '∞' : 'x' + a.concurrency ]]</span>
-                  <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ formatTimeout(a.timeout) ]]</span>
-                </div>
-              </div>
-              <div v-if="a.next_run" class="text-[11px] text-gray-400 mb-1">Next run: <span class="text-gray-300">[[ formatDate(a.next_run) ]]</span></div>
-              <div class="text-[11px] text-gray-500 mb-3">Last run: <span class="text-gray-400" :title="formatDate(a.last_run)">[[ lastRunLabel(a) ]]</span> <span v-if="a.last_run_status" :class="statusTextClass(a.last_run_status)" class="font-medium">[[ a.last_run_status ]]</span></div>
-              <button @click="trigger(a.id)" class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition mt-auto">Run</button>
-            </div>
+            <ActionCard v-for="a in actions" :key="a.id" :action="a" />
           </div>
         </AppLayout>
       `,
-      components: { AppLayout },
+      components: { AppLayout, ActionCard },
       setup() {
         const actions = ref([])
         const loading = ref(true)
-        const router = useRouter()
-
-        function lastRunLabel(a) {
-          return a && a.last_run ? timeAgo(a.last_run) : '-'
-        }
 
         async function refresh() {
           loading.value = true
@@ -376,15 +481,9 @@
           loading.value = false
         }
 
-        async function trigger(id) {
-          const res = await fetch('/api/actions/' + id + '/trigger', { method: 'POST' })
-          if (!res.ok) throw new Error(await res.text())
-          router.push('/')
-        }
-
         onMounted(function() { refresh() })
 
-        return { actions, loading, trigger, lastRunLabel, statusTextClass, formatTimeout, formatDate }
+        return { actions, loading }
       }
     }
 
@@ -392,65 +491,65 @@
       delimiters: ['[[', ']]'],
       template: `
         <AppLayout>
-          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <div v-if="loading" class="text-faint text-sm">Loading...</div>
           <template v-else>
-            <div v-if="actionDef" class="mb-8 bg-gray-900 border border-gray-800 rounded-lg p-6">
+            <div v-if="actionDef" class="mb-8 bg-surface border border-line rounded-lg p-6">
               <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-3 min-w-0">
-                  <h1 class="text-xl font-semibold text-emerald-400 truncate">[[ actionDef.name ]]</h1>
+                  <h1 class="text-xl font-semibold text-primary truncate">[[ actionDef.name ]]</h1>
                   <div class="flex flex-wrap gap-1.5">
-                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ formatTimeout(actionDef.timeout) ]]</span>
-                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded font-mono">[[ actionDef.concurrency === 0 ? '∞' : 'x' + actionDef.concurrency ]]</span>
-                    <span v-if="actionDef.cron" class="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded font-mono">Cron</span>
+                    <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono">[[ formatTimeout(actionDef.timeout) ]]</span>
+                    <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono">[[ actionDef.concurrency === 0 ? '∞' : 'x' + actionDef.concurrency ]]</span>
+                    <span v-if="actionDef.cron" class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono">Cron</span>
                   </div>
                 </div>
-                <button @click="trigger" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Run</button>
+                <button @click="trigger" class="px-4 py-2 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Run</button>
               </div>
-              <div class="space-y-2 text-sm font-mono text-gray-400">
-                <div><span class="text-gray-600">ID:</span> [[ actionDef.id ]]</div>
-                <div v-if="actionDef.cron"><span class="text-gray-600">Cron:</span> <span class="text-blue-400">[[ actionDef.cron ]]</span></div>
-                <div v-if="actionDef.next_run"><span class="text-gray-600">Next run:</span> <span class="text-gray-300">[[ formatDate(actionDef.next_run) ]]</span></div>
-                <div><span class="text-gray-600">Last run:</span> <span class="text-gray-300">[[ lastRun ]]</span> <span v-if="lastRunStatus" :class="statusTextClass(lastRunStatus)" class="font-medium text-xs">[[ lastRunStatus ]]</span></div>
-                <div><span class="text-gray-600">CWD:</span> [[ actionDef.cwd ]]</div>
+              <div class="space-y-2 text-sm font-mono text-muted">
+                <div><span class="text-faint">ID:</span> [[ actionDef.id ]]</div>
+                <div v-if="actionDef.cron"><span class="text-faint">Cron:</span> <span class="text-accent">[[ actionDef.cron ]]</span></div>
+                <div v-if="actionDef.next_run"><span class="text-faint">Next run:</span> <span class="text-subdued">[[ formatDate(actionDef.next_run) ]]</span></div>
+                <div><span class="text-faint">Last run:</span> <span class="text-subdued">[[ lastRun ]]</span> <span v-if="lastRunStatus" :class="statusTextClass(lastRunStatus)" class="font-medium text-xs">[[ lastRunStatus ]]</span></div>
+                <div><span class="text-faint">CWD:</span> [[ actionDef.cwd ]]</div>
               </div>
               <div class="mt-4">
-                <span class="text-gray-600 text-sm">Command:</span>
-                <pre class="mt-2 p-4 bg-gray-950 rounded-lg text-sm text-gray-300 whitespace-pre-wrap">[[ actionDef.command ]]</pre>
+                <span class="text-faint text-sm">Command:</span>
+                <pre class="mt-2 p-4 bg-page rounded-lg text-sm text-subdued whitespace-pre-wrap">[[ actionDef.command ]]</pre>
               </div>
             </div>
-            <div v-else class="text-gray-600 mb-8">Action not found.</div>
+            <div v-else class="text-faint mb-8">Action not found.</div>
 
-            <h2 class="text-lg font-semibold mb-4 text-gray-300">Execution History</h2>
-            <div v-if="filtered.length === 0" class="text-gray-600 text-sm bg-gray-900 rounded-lg border border-gray-800 px-4 py-8 text-center">No executions yet.</div>
+            <h2 class="text-lg font-semibold mb-4 text-subdued">Execution History</h2>
+            <div v-if="filtered.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
             <template v-else>
-              <div class="overflow-x-auto rounded-lg border border-gray-800">
+              <div class="overflow-x-auto rounded-lg border border-line">
                 <table class="w-full text-sm">
-                  <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                  <thead class="bg-surface text-muted uppercase text-xs">
                     <tr>
                       <th class="px-4 py-3 text-left w-16">ID</th>
                       <th class="px-4 py-3 text-left w-28">Status</th>
                       <th class="px-4 py-3 text-left w-24">Duration</th>
-                      <th class="px-4 py-3 text-left w-48">Time</th>
+                      <th class="px-4 py-3 text-left w-48">Started</th>
                       <th class="px-4 py-3 text-left w-20">Log</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-800/60">
-                    <tr v-for="e in paged" :key="e.id" class="hover:bg-gray-900/50 transition">
-                      <td class="px-4 py-3 font-mono text-gray-600">[[ e.id ]]</td>
-                      <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
-                      <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
-                      <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                  <tbody class="divide-y divide-rule">
+                    <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
+                      <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
+                      <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                      <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
+                      <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-gray-400">
+              <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-muted">
                 <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, filtered.length) ]] of [[ filtered.length ]]</span>
                 <div class="flex gap-2">
-                  <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:bg-gray-800 transition">Prev</button>
-                  <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-emerald-600 text-white' : 'border border-gray-700 hover:bg-gray-800'" class="px-3 py-1 rounded transition">[[ n ]]</button>
-                  <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:bg-gray-800 transition">Next</button>
+                  <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
+                  <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
+                  <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
                 </div>
               </div>
             </template>
@@ -465,7 +564,7 @@
         const history = ref([])
         const loading = ref(true)
         const p = ref(1)
-        const perPage = 20
+        const perPage = PER_PAGE
         let pollTimer = null
 
         const filtered = computed(() => {
@@ -483,9 +582,10 @@
         })
         const pr = computed(function() {
           var pages = []
-          var max = Math.min(5, tp.value)
-          var s = Math.max(1, p.value - 2)
-          for (var i = 0; i < max; i++) pages.push(s + i)
+          var start = Math.max(1, p.value - Math.floor(MAX_VISIBLE_PAGES / 2))
+          var end = Math.min(tp.value, start + (MAX_VISIBLE_PAGES - 1))
+          start = Math.max(1, end - (MAX_VISIBLE_PAGES - 1))
+          for (var i = start; i <= end; i++) pages.push(i)
           return pages
         })
 
@@ -552,7 +652,7 @@
         })
         watch(filtered, function() { togglePolling() })
 
-        return { actionDef, filtered, paged, p, perPage, tp, pr, lastRun, lastRunStatus, loading, trigger, statusClass, statusTextClass, formatMs, formatDate, formatTimeout }
+        return { actionDef, filtered, paged, p, perPage, tp, pr, lastRun, lastRunStatus, loading, trigger, statusClass, statusTextClass, formatMs, formatDate, timeAgo, formatTimeout }
       }
     }
 
@@ -560,15 +660,15 @@
       delimiters: ['[[', ']]'],
       template: `
         <AppLayout>
-          <div v-if="loading" class="text-gray-600">Loading...</div>
+          <div v-if="loading" class="text-faint">Loading...</div>
           <template v-else>
             <div v-if="entry" class="mb-6 flex items-center gap-4 flex-wrap">
-              <span :class="statusClass(entry.status)" class="px-3 py-1.5 rounded text-sm font-bold text-white">[[ entry.status ]]</span>
-              <span class="text-gray-500 text-sm">Action: <router-link :to="'/actions/' + entry.action_id" class="text-emerald-400 font-mono hover:underline">[[ entry.action_id ]]</router-link></span>
-              <span class="text-gray-500 text-sm">Duration: <span class="text-gray-300">[[ formatMs(entry.duration_ms) ]]</span></span>
-              <span class="text-gray-500 text-sm">Started: <span class="text-gray-300">[[ formatDate(entry.created_at) ]]</span></span>
+              <span :class="statusClass(entry.status)" class="px-3 py-1.5 rounded text-sm font-bold text-body">[[ entry.status ]]</span>
+              <span class="text-dim text-sm">Action: <router-link :to="'/actions/' + entry.action_id" class="text-primary font-mono hover:underline">[[ entry.action_id ]]</router-link></span>
+              <span class="text-dim text-sm">Duration: <span class="text-subdued">[[ formatMs(entry.duration_ms) ]]</span></span>
+              <span class="text-dim text-sm">Started: <span class="text-subdued" :title="formatDate(entry.created_at)">[[ timeAgo(entry.created_at) ]]</span></span>
             </div>
-            <pre class="bg-gray-900 border border-gray-800 rounded-lg p-4 font-mono text-xs text-gray-300 leading-relaxed overflow-auto max-h-[70vh]">[[ logContent || 'No log content.' ]]</pre>
+            <pre class="bg-surface border border-line rounded-lg p-4 font-mono text-xs text-subdued leading-relaxed overflow-auto max-h-[70vh]">[[ logContent || 'No log content.' ]]</pre>
           </template>
         </AppLayout>
       `,
@@ -602,7 +702,7 @@
           if (pollTimer) clearInterval(pollTimer)
         })
 
-        return { entry, logContent, loading, statusClass, formatMs, formatDate }
+        return { entry, logContent, loading, statusClass, formatMs, formatDate, timeAgo }
       }
     }
 
@@ -612,43 +712,43 @@
         <AppLayout>
           <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-semibold">System</h1>
-            <button @click="refresh" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition">Refresh</button>
+            <button @click="refresh" class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Refresh</button>
           </div>
 
-          <div v-if="loading" class="text-gray-600 text-sm">Loading...</div>
+          <div v-if="loading" class="text-faint text-sm">Loading...</div>
           <template v-else>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <div>
-                <h2 class="text-lg font-semibold mb-3 text-gray-300">Runtime</h2>
-                <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2 text-sm">
-                  <div class="flex justify-between"><span class="text-gray-500">Version</span><span class="font-mono">[[ data.version ]]</span></div>
-                  <div class="flex justify-between"><span class="text-gray-500">OS</span><span>[[ data.os ]]/[[ data.arch ]]</span></div>
-                  <div class="flex justify-between"><span class="text-gray-500">Uptime</span><span>[[ data.uptime ]]</span></div>
-                  <div class="flex justify-between"><span class="text-gray-500">Goroutines</span><span>[[ data.goroutines ]]</span></div>
-                  <div class="flex justify-between"><span class="text-gray-500">CPUs</span><span>[[ data.cpus ]]</span></div>
+                <h2 class="text-lg font-semibold mb-3 text-subdued">Runtime</h2>
+                <div class="bg-surface border border-line rounded-lg p-4 space-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-dim">Version</span><span class="font-mono">[[ data.version ]]</span></div>
+                  <div class="flex justify-between"><span class="text-dim">OS</span><span>[[ data.os ]]/[[ data.arch ]]</span></div>
+                  <div class="flex justify-between"><span class="text-dim">Uptime</span><span>[[ data.uptime ]]</span></div>
+                  <div class="flex justify-between"><span class="text-dim">Goroutines</span><span>[[ data.goroutines ]]</span></div>
+                  <div class="flex justify-between"><span class="text-dim">CPUs</span><span>[[ data.cpus ]]</span></div>
                 </div>
               </div>
               <div>
-                <h2 class="text-lg font-semibold mb-3 text-gray-300">Configuration</h2>
-                <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2 text-sm">
+                <h2 class="text-lg font-semibold mb-3 text-subdued">Configuration</h2>
+                <div class="bg-surface border border-line rounded-lg p-4 space-y-2 text-sm">
                   <div v-for="(v, k) in data.config" :key="k" class="flex justify-between">
-                    <span class="text-gray-500">[[ k ]]</span>
-                    <span class="font-mono text-gray-300">[[ v ]]</span>
+                    <span class="text-dim">[[ k ]]</span>
+                    <span class="font-mono text-subdued">[[ v ]]</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <h2 class="text-lg font-semibold mb-3 text-gray-300">Environment Variables</h2>
-            <div class="overflow-x-auto rounded-lg border border-gray-800">
+            <h2 class="text-lg font-semibold mb-3 text-subdued">Environment Variables</h2>
+            <div class="overflow-x-auto rounded-lg border border-line">
               <table class="w-full text-sm">
-                <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+                <thead class="bg-surface text-muted uppercase text-xs">
                   <tr><th class="px-4 py-3 text-left w-1/3">Name</th><th class="px-4 py-3 text-left">Value</th></tr>
                 </thead>
-                <tbody class="divide-y divide-gray-800/60">
-                  <tr v-for="e in data.environment" :key="e.name" class="hover:bg-gray-900/50 transition">
-                    <td class="px-4 py-2 font-mono text-emerald-400">[[ e.name ]]</td>
-                    <td class="px-4 py-2 font-mono text-gray-300 break-all">[[ e.value ]]</td>
+                <tbody class="divide-y divide-rule">
+                  <tr v-for="e in data.environment" :key="e.name" class="hover:bg-surface/50 transition">
+                    <td class="px-4 py-2 font-mono text-primary">[[ e.name ]]</td>
+                    <td class="px-4 py-2 font-mono text-subdued break-all">[[ e.value ]]</td>
                   </tr>
                 </tbody>
               </table>

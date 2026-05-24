@@ -82,6 +82,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+const defaultHistoryLimit = 500
+
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -102,7 +104,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		entries, err = s.db.GetHistoryByIDs(ids)
 	} else {
-		entries, err = s.db.ListHistory(50)
+		entries, err = s.db.ListHistory(defaultHistoryLimit)
 	}
 
 	if err != nil {
