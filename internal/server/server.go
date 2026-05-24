@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,18 +26,20 @@ import (
 var uiContent embed.FS
 
 type Server struct {
-	cfg    *config.Config
-	db     *db.DB
-	runner *executor.Runner
-	sched  *executor.Scheduler
+	cfg       *config.Config
+	db        *db.DB
+	runner    *executor.Runner
+	sched     *executor.Scheduler
+	startTime time.Time
 }
 
 func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executor.Scheduler) {
 	s := &Server{
-		cfg:    cfg,
-		db:     d,
-		runner: runner,
-		sched:  sched,
+		cfg:       cfg,
+		db:        d,
+		runner:    runner,
+		sched:     sched,
+		startTime: time.Now(),
 	}
 
 	os.MkdirAll(cfg.ActionDir, 0755)
@@ -48,6 +52,7 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executo
 	mux.HandleFunc("/api/actions/", s.handleActions)
 	mux.HandleFunc("/api/actions", s.handleActions)
 	mux.HandleFunc("/api/clean", s.handleClean)
+	mux.HandleFunc("/api/system", s.handleSystem)
 
 	fmt.Printf("[server] listening on %s:%s\n", cfg.Host, cfg.Port)
 	srv := &http.Server{
@@ -208,6 +213,60 @@ func (s *Server) listActions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(actions)
+}
+
+func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	envVars := os.Environ()
+	sensitiveSuffixes := []string{"key", "secret", "password", "token", "auth", "credential", "passwd"}
+	env := make([]map[string]string, 0)
+	for _, e := range envVars {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		lower := strings.ToLower(parts[0])
+		redacted := false
+		for _, s := range sensitiveSuffixes {
+			if strings.Contains(lower, s) {
+				redacted = true
+				break
+			}
+		}
+		val := parts[1]
+		if redacted && val != "" {
+			val = "***redacted***"
+		}
+		env = append(env, map[string]string{"name": parts[0], "value": val})
+	}
+	sort.Slice(env, func(i, j int) bool {
+		return env[i]["name"] < env[j]["name"]
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"version":   runtime.Version(),
+		"os":        runtime.GOOS,
+		"arch":      runtime.GOARCH,
+		"uptime":    time.Since(s.startTime).String(),
+		"goroutines": runtime.NumGoroutine(),
+		"cpus":      runtime.NumCPU(),
+		"config": map[string]interface{}{
+			"host":        s.cfg.Host,
+			"port":        s.cfg.Port,
+			"timeout":     s.cfg.Timeout,
+			"data_dir":    s.cfg.DataDir,
+			"log_dir":     s.cfg.LogDir,
+			"action_dir":  s.cfg.ActionDir,
+			"clean_days":  s.cfg.CleanDays,
+			"max_log_num": s.cfg.MaxLogNum,
+		},
+		"environment": env,
+	})
 }
 
 func (s *Server) handleClean(w http.ResponseWriter, r *http.Request) {
