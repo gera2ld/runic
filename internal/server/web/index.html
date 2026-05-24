@@ -323,7 +323,7 @@
             No actions found. Place YAML files in <code class="text-emerald-400">actions/&lt;id&gt;.yml</code>
           </div>
           <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <div v-for="a in actions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div v-for="a in actions" :key="a.id" class="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col">
               <div class="flex items-center justify-between mb-2">
                 <router-link :to="'/actions/' + a.id" class="font-semibold text-emerald-400 hover:underline truncate">[[ a.name || a.id ]]</router-link>
                 <div class="flex gap-1 shrink-0">
@@ -334,7 +334,7 @@
               </div>
               <div class="text-[11px] text-gray-500 font-mono truncate mb-3" :title="a.command">[[ a.command ]]</div>
               <div v-if="a.next_run" class="text-[11px] text-gray-400 mb-3">Next run: <span class="text-gray-300">[[ formatDate(a.next_run) ]]</span></div>
-              <button @click="trigger(a.id)" class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition">Run</button>
+              <button @click="trigger(a.id)" class="w-full px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 font-medium transition mt-auto">Run</button>
             </div>
           </div>
         </AppLayout>
