@@ -76,13 +76,11 @@
       setup() {
         const route = useRoute()
         const activeTab = computed(function() {
-          var p = route.path
-          if (p === '/') return 'runic'
-          if (p === '/executions') return 'executions'
-          if (p.match(/^\/actions\/[^/]+\/history/)) return 'executions'
-          if (p.match(/^\/actions\//)) return 'actions'
-          if (p === '/system') return 'system'
-          return 'system'
+          var seg = route.path.split('/')[1]
+          if (!seg) return 'runic'
+          if (seg === 'actions') return 'actions'
+          if (seg === 'executions') return 'executions'
+          if (seg === 'system') return 'system'
         })
         return { activeTab }
       }
@@ -138,7 +136,7 @@
                       <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id" class="font-mono text-emerald-300 hover:underline text-xs">[[ e.action_id ]]</router-link></td>
                       <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
                       <td class="px-4 py-2 text-gray-500 text-xs">[[ formatDate(e.created_at) ]]</td>
-                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                      <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
                 </table>
@@ -255,7 +253,7 @@
                   <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
                   <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
                   <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                 </tr>
               </tbody>
             </table>
@@ -419,7 +417,7 @@
                       <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-white">[[ e.status ]]</span></td>
                       <td class="px-4 py-3 text-gray-400">[[ formatMs(e.duration_ms) ]]</td>
                       <td class="px-4 py-3 text-gray-500">[[ formatDate(e.created_at) ]]</td>
-                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/history/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
+                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-blue-400 hover:text-blue-300 text-xs font-medium">View</router-link></td>
                     </tr>
                   </tbody>
                 </table>
@@ -649,7 +647,7 @@
       { path: '/', component: Dashboard },
       { path: '/actions', component: ActionList },
       { path: '/actions/:id', component: ActionDetail },
-      { path: '/actions/:id/history/:hid', component: LogView },
+      { path: '/actions/:id/executions/:hid', component: LogView },
       { path: '/executions', component: ExecutionList },
       { path: '/system', component: SystemPage },
     ]
