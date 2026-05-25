@@ -1,6 +1,6 @@
 # runic
 
-A lightweight command execution and log hosting tool with a web dashboard. Run shell commands defined in YAML, track execution history, and view logs — all from a single binary.
+A modern crontab replacement with a web UI and log viewer. Define scheduled commands in YAML, track execution history, and browse logs — all from a single binary.
 
 ## Installation
 
