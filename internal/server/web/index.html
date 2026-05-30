@@ -182,6 +182,22 @@
       }
     }
 
+    const Breadcrumbs = {
+      props: ['items'],
+      delimiters: ['[[', ']]'],
+      template: `
+        <nav v-if="items && items.length" aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <template v-for="(item, index) in items" :key="item.to || item.label">
+            <router-link v-if="item.to && index < items.length - 1" :to="item.to" class="hover:text-body transition font-medium">
+              [[ item.label ]]
+            </router-link>
+            <span v-else class="font-medium text-body">[[ item.label ]]</span>
+            <span v-if="index < items.length - 1" class="text-faint">/</span>
+          </template>
+        </nav>
+      `,
+    }
+
     const ActionCard = {
       props: ['action'],
       delimiters: ['[[', ']]'],
@@ -358,41 +374,43 @@
           </div>
           <div v-if="initialLoading" class="text-faint text-sm">Loading...</div>
           <div v-else-if="history.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
-          <div v-else class="overflow-x-auto rounded-lg border border-line">
-            <table class="w-full text-sm">
-              <thead class="bg-surface text-muted uppercase text-xs">
-                <tr>
-                  <th class="px-4 py-3 text-left w-16">ID</th>
-                  <th class="px-4 py-3 text-left">Action</th>
-                  <th class="px-4 py-3 text-left w-28">Status</th>
-                  <th class="px-4 py-3 text-left w-24">Duration</th>
-                  <th class="px-4 py-3 text-left w-48">Started</th>
-                  <th class="px-4 py-3 text-left w-20">Log</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-rule">
-                <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
-                  <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id" class="font-mono text-primary hover:underline">[[ e.action_id ]]</router-link></td>
-                  <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
-                  <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
-                  <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
-                  <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-muted">
-            <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, history.length) ]] of [[ history.length ]]</span>
-            <div class="flex gap-2">
-              <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
-              <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
-              <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
+          <div v-else>
+            <div v-if="tp > 1" class="flex items-center justify-between mb-4 text-sm text-muted">
+              <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, history.length) ]] of [[ history.length ]]</span>
+              <div class="flex gap-2">
+                <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
+                <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
+                <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
+              </div>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-line">
+              <table class="w-full text-sm">
+                <thead class="bg-surface text-muted uppercase text-xs">
+                  <tr>
+                    <th class="px-4 py-3 text-left w-16">ID</th>
+                    <th class="px-4 py-3 text-left">Action</th>
+                    <th class="px-4 py-3 text-left w-28">Status</th>
+                    <th class="px-4 py-3 text-left w-24">Duration</th>
+                    <th class="px-4 py-3 text-left w-48">Started</th>
+                    <th class="px-4 py-3 text-left w-20">Log</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-rule">
+                  <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
+                    <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
+                    <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id" class="font-mono text-primary hover:underline">[[ e.action_id ]]</router-link></td>
+                    <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                    <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
+                    <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                    <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </AppLayout>
       `,
-      components: { AppLayout },
+      components: { AppLayout, ActionCard },
       setup() {
         const history = ref([])
         const loading = ref(false)
@@ -504,70 +522,72 @@
         <AppLayout>
           <div v-if="loading" class="text-faint text-sm">Loading...</div>
           <template v-else>
-            <div v-if="actionDef" class="mb-8 bg-surface border border-line rounded-lg p-6">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3 min-w-0">
-                  <h1 class="text-xl font-semibold text-primary truncate">[[ actionDef.name ]]</h1>
-                  <div class="flex flex-wrap gap-1.5">
-                    <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono">[[ formatTimeout(actionDef.timeout) ]]</span>
-                    <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono">[[ actionDef.concurrency === 0 ? '∞' : 'x' + actionDef.concurrency ]]</span>
-                    <span v-if="actionDef.cron" class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono">Cron</span>
+            <Breadcrumbs :items="breadcrumbs" class="mb-4" />
+            <div v-if="actionDef">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Basic Info -->
+                <div class="bg-surface border border-line rounded-lg p-6 flex flex-col">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <h1 class="text-xl font-semibold text-primary truncate">[[ actionDef.name ]]</h1>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono" title="Timeout">[[ formatTimeout(actionDef.timeout) ]]</span>
+                        <span class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono" :title="'Concurrency: ' + (actionDef.concurrency === 0 ? 'unlimited' : actionDef.concurrency)">[[ actionDef.concurrency === 0 ? '∞' : 'x' + actionDef.concurrency ]]</span>
+                        <span v-if="actionDef.cron" class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono" :title="'Cron: ' + actionDef.cron">Cron</span>
+                      </div>
+                    </div>
+                    <button @click="trigger" class="px-4 py-2 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Run</button>
+                  </div>
+                  <div class="space-y-2 text-sm font-mono text-muted mb-6">
+                    <div><span class="text-faint">ID:</span> [[ actionDef.id ]]</div>
+                    <div v-if="actionDef.cron"><span class="text-faint">Cron:</span> <span class="text-accent">[[ actionDef.cron ]]</span></div>
+                    <div v-if="actionDef.next_run"><span class="text-faint">Next run:</span> <span class="text-subdued">[[ formatDate(actionDef.next_run) ]]</span></div>
+                    <div><span class="text-faint">Last run:</span> <span class="text-subdued">[[ lastRun ]]</span> <span v-if="lastRunStatus" :class="statusTextClass(lastRunStatus)" class="font-medium text-xs">[[ lastRunStatus ]]</span></div>
+                    <div><span class="text-faint">CWD:</span> [[ actionDef.cwd ]]</div>
                   </div>
                 </div>
-                <button @click="trigger" class="px-4 py-2 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition">Run</button>
+
+                <!-- Recent Executions -->
+                <div>
+                  <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-lg font-semibold text-subdued">Recent Executions</h2>
+                    <router-link :to="'/actions/' + actionDef.id + '/executions'" class="text-xs text-primary hover:text-primary">View all →</router-link>
+                  </div>
+                  <div v-if="filtered.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
+                  <div v-else class="overflow-x-auto rounded-lg border border-line">
+                    <table class="w-full text-sm">
+                      <thead class="bg-surface text-muted uppercase text-xs">
+                        <tr>
+                          <th class="px-4 py-2 text-left w-16">ID</th>
+                          <th class="px-4 py-2 text-left w-24">Status</th>
+                          <th class="px-4 py-2 text-left w-48">Started</th>
+                          <th class="px-4 py-2 text-left w-20">Log</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-rule">
+                        <tr v-for="e in filtered.slice(0, 5)" :key="e.id" class="hover:bg-surface/50 transition">
+                          <td class="px-4 py-2 font-mono text-faint">[[ e.id ]]</td>
+                          <td class="px-4 py-2"><span :class="statusClass(e.status)" class="px-2 py-0.5 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                          <td class="px-4 py-2 text-dim text-xs" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                          <td class="px-4 py-2"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-              <div class="space-y-2 text-sm font-mono text-muted">
-                <div><span class="text-faint">ID:</span> [[ actionDef.id ]]</div>
-                <div v-if="actionDef.cron"><span class="text-faint">Cron:</span> <span class="text-accent">[[ actionDef.cron ]]</span></div>
-                <div v-if="actionDef.next_run"><span class="text-faint">Next run:</span> <span class="text-subdued">[[ formatDate(actionDef.next_run) ]]</span></div>
-                <div><span class="text-faint">Last run:</span> <span class="text-subdued">[[ lastRun ]]</span> <span v-if="lastRunStatus" :class="statusTextClass(lastRunStatus)" class="font-medium text-xs">[[ lastRunStatus ]]</span></div>
-                <div><span class="text-faint">CWD:</span> [[ actionDef.cwd ]]</div>
-              </div>
-              <div class="mt-4">
-                <span class="text-faint text-sm">Command:</span>
-                <pre class="mt-2 p-4 bg-page rounded-lg text-sm text-subdued whitespace-pre-wrap">[[ actionDef.command ]]</pre>
+
+              <!-- Script -->
+              <div>
+                <h2 class="text-lg font-semibold mb-3 text-subdued">Script</h2>
+                <pre class="p-4 bg-surface border border-line rounded-lg text-sm text-subdued whitespace-pre-wrap font-mono">[[ actionDef.command ]]</pre>
               </div>
             </div>
             <div v-else class="text-faint mb-8">Action not found.</div>
-
-            <h2 class="text-lg font-semibold mb-4 text-subdued">Execution History</h2>
-            <div v-if="filtered.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
-            <template v-else>
-              <div class="overflow-x-auto rounded-lg border border-line">
-                <table class="w-full text-sm">
-                  <thead class="bg-surface text-muted uppercase text-xs">
-                    <tr>
-                      <th class="px-4 py-3 text-left w-16">ID</th>
-                      <th class="px-4 py-3 text-left w-28">Status</th>
-                      <th class="px-4 py-3 text-left w-24">Duration</th>
-                      <th class="px-4 py-3 text-left w-48">Started</th>
-                      <th class="px-4 py-3 text-left w-20">Log</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-rule">
-                    <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
-                      <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
-                      <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
-                      <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
-                      <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
-                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-if="tp > 1" class="flex items-center justify-between mt-4 text-sm text-muted">
-                <span>[[ (p - 1) * perPage + 1 ]]-[[ Math.min(p * perPage, filtered.length) ]] of [[ filtered.length ]]</span>
-                <div class="flex gap-2">
-                  <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
-                  <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
-                  <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
-                </div>
-              </div>
-            </template>
           </template>
         </AppLayout>
       `,
-      components: { AppLayout },
+      components: { AppLayout, Breadcrumbs },
       setup() {
         const route = useRoute()
         const router = useRouter()
@@ -663,7 +683,182 @@
         })
         watch(filtered, function() { togglePolling() })
 
-        return { actionDef, filtered, paged, p, perPage, tp, pr, lastRun, lastRunStatus, loading, trigger, statusClass, statusTextClass, formatMs, formatDate, timeAgo, formatTimeout }
+        const breadcrumbs = computed(function() {
+          return [
+            { label: 'Actions', to: '/actions' },
+            { label: actionDef.value && actionDef.value.name ? actionDef.value.name : route.params.id, to: '/actions/' + route.params.id },
+          ]
+        })
+
+        return { actionDef, filtered, paged, p, perPage, tp, pr, lastRun, lastRunStatus, loading, trigger, statusClass, statusTextClass, formatMs, formatDate, timeAgo, formatTimeout, breadcrumbs }
+      }
+    }
+
+    const ActionExecutionsPage = {
+      delimiters: ['[[', ']]'],
+      template: `
+        <AppLayout>
+          <div v-if="loading" class="text-faint text-sm">Loading...</div>
+          <template v-else>
+            <Breadcrumbs :items="breadcrumbs" class="mb-4" />
+
+
+            <div v-if="filtered.length === 0" class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center">No executions yet.</div>
+            <template v-else>
+              <div v-if="tp > 1" class="flex items-center justify-between mb-4 text-sm text-muted">
+                <span>[[ (p - 1) * pageSize + 1 ]]-[[ Math.min(p * pageSize, filtered.length) ]] of [[ filtered.length ]]</span>
+                <div class="flex gap-4 items-center">
+                  <label class="flex items-center gap-2 text-xs text-muted">
+                    <span>Per page</span>
+                    <select v-model.number="pageSize" class="bg-surface border border-line-muted rounded px-2 py-1 text-xs text-body focus:outline-none focus:ring-1 focus:ring-primary/40">
+                      <option v-for="size in pageSizeOptions" :key="size" :value="size">[[ size ]]</option>
+                    </select>
+                  </label>
+                  <div class="flex gap-2">
+                    <button @click="p = Math.max(1, p - 1)" :disabled="p === 1" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Prev</button>
+                    <button v-for="n in pr" :key="n" @click="p = n" :class="n === p ? 'bg-primary-solid text-body' : 'border border-line-muted hover:bg-elevated'" class="px-3 py-1 rounded transition">[[ n ]]</button>
+                    <button @click="p = Math.min(tp, p + 1)" :disabled="p === tp" class="px-3 py-1 rounded border border-line-muted disabled:opacity-40 hover:bg-elevated transition">Next</button>
+                  </div>
+                </div>
+              </div>
+              <div class="overflow-x-auto rounded-lg border border-line">
+                <table class="w-full text-sm">
+                  <thead class="bg-surface text-muted uppercase text-xs">
+                    <tr>
+                      <th class="px-4 py-3 text-left w-16">ID</th>
+                      <th class="px-4 py-3 text-left w-28">Status</th>
+                      <th class="px-4 py-3 text-left w-24">Duration</th>
+                      <th class="px-4 py-3 text-left w-48">Started</th>
+                      <th class="px-4 py-3 text-left w-20">Log</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-rule">
+                    <tr v-for="e in paged" :key="e.id" class="hover:bg-surface/50 transition">
+                      <td class="px-4 py-3 font-mono text-faint">[[ e.id ]]</td>
+                      <td class="px-4 py-3"><span :class="statusClass(e.status)" class="px-2 py-1 rounded text-xs font-bold text-body">[[ e.status ]]</span></td>
+                      <td class="px-4 py-3 text-muted">[[ formatMs(e.duration_ms) ]]</td>
+                      <td class="px-4 py-3 text-dim" :title="formatDate(e.created_at)">[[ timeAgo(e.created_at) ]]</td>
+                      <td class="px-4 py-3"><router-link :to="'/actions/' + e.action_id + '/executions/' + e.id" class="text-accent hover:text-accent-dim text-xs font-medium">View</router-link></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+          </template>
+        </AppLayout>
+      `,
+      components: { AppLayout, Breadcrumbs },
+      setup() {
+        const route = useRoute()
+        const router = useRouter()
+        const actionDef = ref(null)
+        const history = ref([])
+        const loading = ref(true)
+        const p = ref(1)
+        const pageSizeOptions = [15, 20, 50, 100]
+        const pageSize = ref(15)
+        let pollTimer = null
+
+        function syncPageSize() {
+          var raw = route.query && route.query.page_size ? parseInt(route.query.page_size, 10) : 0
+          if (pageSizeOptions.indexOf(raw) !== -1) {
+            pageSize.value = raw
+          } else {
+            pageSize.value = 15
+          }
+        }
+
+        const filtered = computed(function() {
+          var h = history.value
+          if (!Array.isArray(h)) return []
+          var aid = route.params && route.params.id ? route.params.id : ''
+          return h.filter(function(e) { return e.action_id === aid })
+        })
+        const tp = computed(function() {
+          return Math.max(1, Math.ceil(filtered.value.length / pageSize.value))
+        })
+        const paged = computed(function() {
+          var start = (p.value - 1) * pageSize.value
+          return filtered.value.slice(start, start + pageSize.value)
+        })
+        const pr = computed(function() {
+          var pages = []
+          var start = Math.max(1, p.value - Math.floor(MAX_VISIBLE_PAGES / 2))
+          var end = Math.min(tp.value, start + (MAX_VISIBLE_PAGES - 1))
+          start = Math.max(1, end - (MAX_VISIBLE_PAGES - 1))
+          for (var i = start; i <= end; i++) pages.push(i)
+          return pages
+        })
+
+        const breadcrumbs = computed(function() {
+          return [
+            { label: 'Actions', to: '/actions' },
+            { label: actionDef.value && actionDef.value.name ? actionDef.value.name : route.params.id, to: '/actions/' + route.params.id },
+            { label: 'Executions' },
+          ]
+        })
+
+        function hasRunning() {
+          for (var i = 0; i < filtered.value.length; i++) {
+            if (filtered.value[i].status === 'RUNNING') return true
+          }
+          return false
+        }
+
+        async function refresh() {
+          try {
+            var actions = await fetchJSON('/api/actions')
+            actionDef.value = null
+            for (var i = 0; i < actions.length; i++) {
+              if (actions[i].id === route.params.id) { actionDef.value = actions[i]; break }
+            }
+            var h = await fetchJSON('/api/history')
+            history.value = Array.isArray(h) ? h : []
+            if (p.value > tp.value) p.value = 1
+          } catch (e) { console.error(e); history.value = [] }
+          loading.value = false
+        }
+
+        async function poll() {
+          var running = history.value.filter(e => e.status === 'RUNNING').map(e => e.id)
+          if (running.length === 0) return
+          try {
+            var h = await fetchJSON('/api/history?ids=' + running.join(','))
+            history.value = patchHistory(history.value, h)
+          } catch (e) { console.error(e) }
+        }
+
+        function togglePolling() {
+          if (hasRunning()) {
+            if (!pollTimer) pollTimer = setInterval(poll, 3000)
+          } else {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+          }
+        }
+
+        onMounted(function() { refresh().then(togglePolling) })
+        onUnmounted(function() { if (pollTimer) clearInterval(pollTimer) })
+        watch(function() { return route.query && route.query.page_size }, function() {
+          syncPageSize()
+          p.value = 1
+        }, { immediate: true })
+        watch(pageSize, function(next, prev) {
+          if (next === prev) return
+          p.value = 1
+          router.replace({
+            path: route.path,
+            query: Object.assign({}, route.query, { page_size: String(next) }),
+          })
+        })
+        watch(function() { return route.params && route.params.id }, function() {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+          p.value = 1
+          loading.value = true
+          refresh().then(togglePolling)
+        })
+        watch(filtered, function() { togglePolling() })
+
+        return { route, actionDef, history, filtered, paged, p, pageSize, pageSizeOptions, tp, pr, loading, breadcrumbs, statusClass, statusTextClass, formatMs, formatDate, timeAgo }
       }
     }
 
@@ -673,6 +868,7 @@
         <AppLayout>
           <div v-if="loading" class="text-faint">Loading...</div>
           <template v-else>
+            <Breadcrumbs :items="breadcrumbs" class="mb-4" />
             <div v-if="entry" class="mb-6 flex items-center gap-4 flex-wrap">
               <span :class="statusClass(entry.status)" class="px-3 py-1.5 rounded text-sm font-bold text-body">[[ entry.status ]]</span>
               <span class="text-dim text-sm">Action: <router-link :to="'/actions/' + entry.action_id" class="text-primary font-mono hover:underline">[[ entry.action_id ]]</router-link></span>
@@ -683,13 +879,23 @@
           </template>
         </AppLayout>
       `,
-      components: { AppLayout },
+      components: { AppLayout, Breadcrumbs },
       setup() {
         const route = useRoute()
         const entry = ref(null)
         const logContent = ref('')
         const loading = ref(true)
         let pollTimer = null
+        const breadcrumbs = computed(function() {
+          var actionID = entry.value && entry.value.action_id ? entry.value.action_id : (route.params && route.params.id ? route.params.id : '')
+          var hid = route.params && route.params.hid ? route.params.hid : ''
+          return [
+            { label: 'Actions', to: '/actions' },
+            { label: actionID, to: '/actions/' + actionID },
+            { label: 'Executions', to: '/actions/' + actionID + '/executions' },
+            { label: '#' + hid },
+          ]
+        })
 
         async function refresh() {
           try {
@@ -713,7 +919,7 @@
           if (pollTimer) clearInterval(pollTimer)
         })
 
-        return { entry, logContent, loading, statusClass, formatMs, formatDate, timeAgo }
+        return { entry, logContent, loading, breadcrumbs, statusClass, formatMs, formatDate, timeAgo }
       }
     }
 
@@ -790,6 +996,7 @@
       { path: '/', component: Dashboard },
       { path: '/actions', component: ActionList },
       { path: '/actions/:id', component: ActionDetail },
+      { path: '/actions/:id/executions', component: ActionExecutionsPage },
       { path: '/actions/:id/executions/:hid', component: LogView },
       { path: '/executions', component: ExecutionList },
       { path: '/system', component: SystemPage },
