@@ -1,0 +1,3 @@
+name: Clean Logs
+cron: "0 3 * * *"
+command: "@internal:clean-logs"

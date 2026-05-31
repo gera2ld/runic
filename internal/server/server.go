@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -19,10 +18,9 @@ import (
 	"runic/internal/config"
 	"runic/internal/db"
 	"runic/internal/executor"
-	"runic/internal/logmgr"
 )
 
-//go:embed web/index.html
+//go:embed all:web/dist
 var uiContent embed.FS
 
 type Server struct {
@@ -47,12 +45,13 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executo
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/api/history", s.handleHistory)
-	mux.HandleFunc("/api/logs/", s.handleLogs)
-	mux.HandleFunc("/api/actions/", s.handleActions)
-	mux.HandleFunc("/api/actions", s.handleActions)
-	mux.HandleFunc("/api/clean", s.handleClean)
-	mux.HandleFunc("/api/system", s.handleSystem)
+	mux.HandleFunc("GET /api/history", s.handleHistory)
+	mux.HandleFunc("GET /api/logs/{hid}", s.handleLogs)
+	mux.HandleFunc("GET /api/actions", s.handleListActions)
+	mux.HandleFunc("GET /api/actions/{id}", s.handleGetAction)
+	mux.HandleFunc("POST /api/actions/{id}/trigger", s.handleTriggerAction)
+	mux.HandleFunc("POST /api/clean", s.handleClean)
+	mux.HandleFunc("GET /api/system", s.handleSystem)
 
 	fmt.Printf("[server] listening on %s:%s\n", cfg.Host, cfg.Port)
 	srv := &http.Server{
@@ -73,24 +72,55 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := uiContent.ReadFile("web/index.html")
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path == "" {
+		path = "index.html"
+	}
+	// Try to serve the file from the embedded dist directory
+	f, err := uiContent.ReadFile("web/dist/" + path)
 	if err != nil {
-		http.Error(w, "UI not found", http.StatusInternalServerError)
+		// SPA fallback: serve index.html for any non-file route
+		f, err = uiContent.ReadFile("web/dist/index.html")
+		if err != nil {
+			http.Error(w, "UI not found", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(f)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(data)
+	// Determine content type from extension
+	ct := "application/octet-stream"
+	switch {
+	case strings.HasSuffix(path, ".html"):
+		ct = "text/html; charset=utf-8"
+	case strings.HasSuffix(path, ".js"):
+		ct = "application/javascript"
+	case strings.HasSuffix(path, ".css"):
+		ct = "text/css"
+	case strings.HasSuffix(path, ".json"):
+		ct = "application/json"
+	case strings.HasSuffix(path, ".svg"):
+		ct = "image/svg+xml"
+	case strings.HasSuffix(path, ".png"):
+		ct = "image/png"
+	case strings.HasSuffix(path, ".ico"):
+		ct = "image/x-icon"
+	case strings.HasSuffix(path, ".woff"):
+		ct = "font/woff"
+	case strings.HasSuffix(path, ".woff2"):
+		ct = "font/woff2"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Write(f)
 }
 
 const defaultHistoryLimit = 500
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	idStr := r.URL.Query().Get("ids")
+	idStr := r.URL.Query().Get("history_ids")
+	actionID := r.URL.Query().Get("action_id")
+	systemParam := r.URL.Query().Get("system")
 	var entries []db.HistoryEntry
 	var err error
 
@@ -114,22 +144,34 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	if entries == nil {
 		entries = []db.HistoryEntry{}
 	}
+
+	if actionID != "" {
+		filtered := make([]db.HistoryEntry, 0)
+		for _, e := range entries {
+			if e.ActionID == actionID {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+	} else if systemParam != "" {
+		isSystem := systemParam == "true"
+		filtered := make([]db.HistoryEntry, 0)
+		for _, e := range entries {
+			sys := strings.HasPrefix(e.ActionID, "@system/")
+			if isSystem == sys {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(entries)
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/logs/")
-	if idStr == "" {
-		http.Error(w, "missing log id", http.StatusBadRequest)
-		return
-	}
-	var id int64
-	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+	id, err := strconv.ParseInt(r.PathValue("hid"), 10, 64)
+	if err != nil {
 		http.Error(w, "invalid log id", http.StatusBadRequest)
 		return
 	}
@@ -147,33 +189,25 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-var actionTriggerRe = regexp.MustCompile(`^/api/actions/([^/]+)/trigger$`)
-
-func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
-	if matches := actionTriggerRe.FindStringSubmatch(r.URL.Path); matches != nil {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.triggerAction(w, r, matches[1])
+func (s *Server) handleGetAction(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "missing action id", http.StatusBadRequest)
 		return
 	}
-
-	if r.URL.Path == "/api/actions" || r.URL.Path == "/api/actions/" {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.listActions(w, r)
+	def, err := executor.LoadAction(s.cfg.ActionDir, id)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
-
-	http.NotFound(w, r)
+	executor.NormalizeAction(def, s.cfg.Timeout)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(def)
 }
 
-func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID string) {
-	actionID = strings.TrimSpace(actionID)
-	if actionID == "" {
+func (s *Server) handleTriggerAction(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
 		http.Error(w, "missing action id", http.StatusBadRequest)
 		return
 	}
@@ -186,7 +220,7 @@ func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID 
 		}
 	}
 
-	historyID, err := s.runner.RunAction(context.Background(), s.db, s.cfg.LogDir, s.cfg.ActionDir, actionID, payload)
+	historyID, err := s.runner.RunAction(context.Background(), s.db, s.cfg.LogDir, s.cfg.ActionDir, id, payload)
 	if err != nil {
 		if errors.Is(err, executor.ErrConcurrencyLimitReached) {
 			http.Error(w, err.Error(), http.StatusConflict)
@@ -199,12 +233,13 @@ func (s *Server) triggerAction(w http.ResponseWriter, r *http.Request, actionID 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":     "queued",
-		"action_id":  actionID,
+		"action_id":  id,
 		"history_id": historyID,
 	})
 }
 
-func (s *Server) listActions(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
+	isSystem := r.URL.Query().Get("system") == "true"
 	actions, err := executor.ListActions(s.cfg.ActionDir, s.cfg.Timeout, s.db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -213,16 +248,20 @@ func (s *Server) listActions(w http.ResponseWriter, r *http.Request) {
 	if actions == nil {
 		actions = []executor.ActionDef{}
 	}
+
+	filtered := make([]executor.ActionDef, 0)
+	for _, a := range actions {
+		sys := strings.HasPrefix(a.ID, "@system/")
+		if isSystem == sys {
+			filtered = append(filtered, a)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(actions)
+	json.NewEncoder(w).Encode(filtered)
 }
 
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	envVars := os.Environ()
 	sensitiveSuffixes := []string{"key", "secret", "password", "token", "auth", "credential", "passwd"}
 	env := make([]map[string]string, 0)
@@ -272,16 +311,12 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClean(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if err := logmgr.Clean(s.cfg.LogDir, s.db, s.cfg.CleanDays, s.cfg.MaxLogNum); err != nil {
+	id, err := s.runner.RunAction(r.Context(), s.db, s.cfg.LogDir, s.cfg.ActionDir, "@system/clean-logs", "")
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "cleaned"})
+	json.NewEncoder(w).Encode(map[string]int64{"history_id": id})
 }

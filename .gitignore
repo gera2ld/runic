@@ -4,3 +4,6 @@
 logs/
 config.yml
 bin/
+web/node_modules/
+web/dist/
+internal/server/web/dist/

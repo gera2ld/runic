@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-page: rgb(3, 7, 18);
+  --color-surface: rgb(17, 24, 39);
+  --color-elevated: rgb(31, 41, 55);
+  --color-subtle: rgb(55, 65, 81);
+  --color-primary: rgb(52, 211, 153);
+  --color-primary-solid: rgb(5, 150, 105);
+  --color-primary-hover: rgb(16, 185, 129);
+  --color-primary-border: rgb(16, 185, 129);
+  --color-accent: rgb(96, 165, 250);
+  --color-accent-dim: rgb(147, 197, 253);
+  --color-body: rgb(243, 244, 246);
+  --color-subdued: rgb(209, 213, 219);
+  --color-muted: rgb(156, 163, 175);
+  --color-dim: rgb(107, 114, 128);
+  --color-faint: rgb(75, 85, 99);
+  --color-line: rgb(31, 41, 55);
+  --color-line-muted: rgb(55, 65, 81);
+  --color-rule: rgb(31, 41, 55);
+  --color-status-success: rgb(5, 150, 105);
+  --color-status-running: rgb(202, 138, 4);
+  --color-status-failed: rgb(220, 38, 38);
+  --color-status-timeout: rgb(234, 88, 12);
+}

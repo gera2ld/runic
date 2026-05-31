@@ -28,17 +28,26 @@ concurrency: 0
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(actions) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(actions))
+
+	var action *ActionDef
+	for _, a := range actions {
+		if a.ID == "sample" {
+			action = &a
+			break
+		}
 	}
-	if actions[0].Concurrency == nil || *actions[0].Concurrency != 0 {
-		t.Fatalf("expected concurrency 0, got %#v", actions[0].Concurrency)
+
+	if action == nil {
+		t.Fatal("expected action 'sample' not found")
 	}
-	if actions[0].NextRun == nil {
+	if action.Concurrency == nil || *action.Concurrency != 0 {
+		t.Fatalf("expected concurrency 0, got %#v", action.Concurrency)
+	}
+	if action.NextRun == nil {
 		t.Fatal("expected next_run to be populated")
 	}
-	if !actions[0].NextRun.After(time.Now()) {
-		t.Fatalf("expected next_run to be in the future, got %v", actions[0].NextRun)
+	if !action.NextRun.After(time.Now()) {
+		t.Fatalf("expected next_run to be in the future, got %v", action.NextRun)
 	}
 }
 
@@ -68,7 +77,7 @@ concurrency: 1
 	}
 	defer d.Close()
 
-	runner := NewRunner(cfg)
+	runner := NewRunner(cfg, d)
 	historyID, err := runner.RunAction(context.Background(), d, logDir, actionDir, "slow", "")
 	if err != nil {
 		t.Fatal(err)

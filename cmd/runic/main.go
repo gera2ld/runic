@@ -84,7 +84,7 @@ func cmdServe() {
 	}
 	defer database.Close()
 
-	runner := executor.NewRunner(cfg)
+	runner := executor.NewRunner(cfg, database)
 	sched := executor.NewScheduler(runner, database, cfg.ActionDir, cfg.LogDir)
 	sched.Start()
 	defer sched.Stop()

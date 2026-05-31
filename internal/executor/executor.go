@@ -2,10 +2,12 @@ package executor
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,12 +34,13 @@ type ActionDef struct {
 
 type Runner struct {
 	cfg    *config.Config
+	db     *db.DB
 	mu     sync.Mutex
 	active map[string]int
 }
 
-func NewRunner(cfg *config.Config) *Runner {
-	return &Runner{cfg: cfg, active: make(map[string]int)}
+func NewRunner(cfg *config.Config, d *db.DB) *Runner {
+	return &Runner{cfg: cfg, db: d, active: make(map[string]int)}
 }
 
 func NormalizeAction(def *ActionDef, defaultTimeout int) {
@@ -61,21 +64,67 @@ func NormalizeAction(def *ActionDef, defaultTimeout int) {
 	}
 }
 
-func LoadAction(actionDir, actionID string) (*ActionDef, error) {
-	data, err := os.ReadFile(actionDir + "/" + actionID + ".yml")
+//go:embed system_actions/*.yml
+var systemActionsFS embed.FS
+
+var SystemActions = make(map[string]ActionDef)
+
+func init() {
+	entries, err := systemActionsFS.ReadDir("system_actions")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read action file: %w", err)
+		panic(err)
 	}
-	var def ActionDef
-	if err := yaml.Unmarshal(data, &def); err != nil {
-		return nil, fmt.Errorf("failed to parse action YAML: %w", err)
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
+			continue
+		}
+		data, err := systemActionsFS.ReadFile("system_actions/" + e.Name())
+		if err != nil {
+			panic(err)
+		}
+		var def ActionDef
+		if err := yaml.Unmarshal(data, &def); err != nil {
+			panic(err)
+		}
+		id := "@system/" + strings.TrimSuffix(e.Name(), ".yml")
+		def.ID = id
+		SystemActions[id] = def
 	}
-	if def.Command == "" {
-		return nil, fmt.Errorf("action %q has no command", actionID)
+}
+
+func LoadAction(actionDir, actionID string) (*ActionDef, error) {
+	var sysDef *ActionDef
+	if sys, ok := SystemActions[actionID]; ok {
+		sysDef = &sys
 	}
-	def.ID = actionID
-	def.Cwd = os.ExpandEnv(def.Cwd)
-	return &def, nil
+
+	// Try loading from file
+	path := filepath.Join(actionDir, actionID+".yml")
+	data, err := os.ReadFile(path)
+	if err == nil {
+		var def ActionDef
+		if err := yaml.Unmarshal(data, &def); err != nil {
+			return nil, fmt.Errorf("failed to parse action YAML: %w", err)
+		}
+		def.ID = actionID
+		if sysDef != nil {
+			// System actions have read-only commands
+			def.Command = sysDef.Command
+		}
+		if def.Command == "" {
+			return nil, fmt.Errorf("action %q has no command", actionID)
+		}
+		def.Cwd = os.ExpandEnv(def.Cwd)
+		return &def, nil
+	}
+
+	// Try loading from system actions
+	if sysDef != nil {
+		copy := *sysDef
+		return &copy, nil
+	}
+
+	return nil, fmt.Errorf("action %q not found: %w", actionID, err)
 }
 
 func (r *Runner) tryAcquire(actionID string, limit int) bool {
@@ -140,7 +189,12 @@ func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionDir, act
 	go func() {
 		defer sl.Close()
 		defer r.release(actionID)
-		result := r.runCommand(ctx, def, sl, payload, actionID)
+		var result RunResult
+		if strings.HasPrefix(def.Command, "@internal:") {
+			result = r.runInternalCommand(ctx, def, sl, actionID)
+		} else {
+			result = r.runCommand(ctx, def, sl, payload, actionID)
+		}
 		result.HistoryID = historyID
 		d.UpdateHistory(result.HistoryID, result.Status, result.Duration)
 		fmt.Printf("[executor] action=%s status=%s duration=%dms exit_code=%d\n",
@@ -148,6 +202,42 @@ func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionDir, act
 	}()
 
 	return historyID, nil
+}
+
+func (r *Runner) runInternalCommand(ctx context.Context, def *ActionDef, sl *logmgr.StreamLogger, actionID string) RunResult {
+	start := time.Now()
+	var err error
+	var status string
+	var exitCode int
+
+	cmd := strings.TrimPrefix(def.Command, "@internal:")
+	switch cmd {
+	case "clean-logs":
+		fmt.Fprintf(sl.Writer(), "[system] starting log cleanup (days=%d, max_logs=%d)\n", r.cfg.CleanDays, r.cfg.MaxLogNum)
+		err = logmgr.Clean(r.cfg.LogDir, r.db, r.cfg.CleanDays, r.cfg.MaxLogNum)
+		if err == nil {
+			fmt.Fprintf(sl.Writer(), "[system] log cleanup completed\n")
+		}
+	default:
+		err = fmt.Errorf("unknown internal command: %s", cmd)
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+	if err != nil {
+		fmt.Fprintf(sl.Writer(), "[system] error: %v\n", err)
+		status = "FAILED"
+		exitCode = 1
+	} else {
+		status = "SUCCESS"
+		exitCode = 0
+	}
+
+	return RunResult{
+		ActionID: actionID,
+		Status:   status,
+		ExitCode: exitCode,
+		Duration: elapsed,
+	}
 }
 
 func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.StreamLogger, payload, actionID string) RunResult {
@@ -210,26 +300,37 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 }
 
 func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
-	entries, err := os.ReadDir(actionDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+	actionsMap := make(map[string]ActionDef)
+
+	// Load system actions first
+	for id, sys := range SystemActions {
+		def := sys
+		NormalizeAction(&def, defaultTimeout)
+		actionsMap[id] = def
 	}
 
-	var actions []ActionDef
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
-			continue
+	// Load from disk, possibly overriding system actions
+	filepath.WalkDir(actionDir, func(path string, e os.DirEntry, err error) error {
+		if err != nil || e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
+			return nil
 		}
-		id := strings.TrimSuffix(e.Name(), ".yml")
+		rel, err := filepath.Rel(actionDir, path)
+		if err != nil {
+			return nil
+		}
+		id := strings.TrimSuffix(rel, ".yml")
 		def, err := LoadAction(actionDir, id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[executor] failed to load action %s: %v\n", id, err)
-			continue
+			return nil
 		}
 		NormalizeAction(def, defaultTimeout)
+		actionsMap[id] = *def
+		return nil
+	})
+
+	var actions []ActionDef
+	for id, def := range actionsMap {
 		if def.Cron != "" {
 			if schedule, err := cron.ParseStandard(def.Cron); err == nil {
 				nextRun := schedule.Next(time.Now())
@@ -243,7 +344,7 @@ func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, e
 				def.LastRunStatus = lastRun.Status
 			}
 		}
-		actions = append(actions, *def)
+		actions = append(actions, def)
 	}
 	return actions, nil
 }

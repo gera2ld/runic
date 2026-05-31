@@ -5,10 +5,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
+
+var safeFilenameRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
+func sanitizeFilename(s string) string {
+	return safeFilenameRe.ReplaceAllString(s, "_")
+}
 
 type StreamLogger struct {
 	file *os.File
@@ -20,7 +27,7 @@ func NewStreamLogger(logDir, actionID string) (*StreamLogger, error) {
 		return nil, err
 	}
 	ts := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("task_%s_%s.log", actionID, ts)
+	filename := fmt.Sprintf("task_%s_%s.log", sanitizeFilename(actionID), ts)
 	path := filepath.Join(logDir, filename)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
