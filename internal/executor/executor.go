@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -346,5 +347,8 @@ func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, e
 		}
 		actions = append(actions, def)
 	}
+	sort.Slice(actions, func(i, j int) bool {
+		return actions[i].ID < actions[j].ID
+	})
 	return actions, nil
 }
