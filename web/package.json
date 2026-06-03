@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "vue-tsc --noEmit",
+    "check": "oxfmt && vue-tsc --noEmit",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

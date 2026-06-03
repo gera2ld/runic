@@ -53,7 +53,7 @@ watch(
     </div>
     <div v-if="!loading && actions.length > 0">
       <Pagination v-model="p" :total="actions.length" :pageSize="perPage" />
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         <ActionCard v-for="a in paged" :key="a.id" :action="a" @triggered="refresh" />
       </div>
     </div>

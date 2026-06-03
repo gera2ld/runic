@@ -26,7 +26,7 @@ const recentActions = computed(() => {
       const found = actions.value.find((a) => a.id === aid);
       if (found) result.push(found);
     }
-    if (result.length >= 4) break;
+    if (result.length >= 2) break;
   }
   return result;
 });
@@ -82,8 +82,8 @@ onMounted(() => refresh());
       </button>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div class="lg:col-span-1 @container">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-lg font-semibold text-subdued">Recent Actions</h2>
           <router-link to="/actions" class="text-xs text-primary hover:text-primary"
@@ -102,7 +102,7 @@ onMounted(() => refresh());
         >
           No actions yet.
         </div>
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div v-else class="grid grid-cols-1 @md:grid-cols-2 gap-3">
           <ActionCard
             v-for="a in recentActions"
             :key="a.id"
@@ -112,7 +112,7 @@ onMounted(() => refresh());
         </div>
       </div>
 
-      <div>
+      <div class="lg:col-span-2">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-lg font-semibold text-subdued">Recent Executions</h2>
           <router-link to="/executions" class="text-xs text-primary hover:text-primary"

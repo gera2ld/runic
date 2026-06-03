@@ -91,66 +91,68 @@ watch(
     <template v-else>
       <Breadcrumbs :items="breadcrumbs" class="mb-4" />
       <div v-if="actionDef">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div class="bg-surface border border-line rounded-lg p-6 flex flex-col">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-3 min-w-0">
-                <h1 class="text-xl font-semibold text-primary truncate">{{ actionDef.name }}</h1>
-                <div class="flex flex-wrap gap-1.5">
-                  <span
-                    class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono"
-                    title="Timeout"
-                    >{{ formatTimeout(actionDef.timeout) }}</span
-                  >
-                  <span
-                    class="text-[10px] px-1.5 py-0.5 bg-subtle text-body rounded font-mono"
-                    :title="
-                      'Concurrency: ' +
-                      (actionDef.concurrency === 0 ? 'unlimited' : actionDef.concurrency)
-                    "
-                  >
-                    {{ actionDef.concurrency === 0 ? "\u221e" : "x" + actionDef.concurrency }}
-                  </span>
-                  <span
-                    v-if="actionDef.cron"
-                    class="text-[10px] px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono"
-                    :title="'Cron: ' + actionDef.cron"
-                    >Cron</span
-                  >
-                </div>
-              </div>
-              <button
-                @click="trigger"
-                class="px-4 py-2 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition"
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div class="lg:col-span-1 bg-surface border border-line rounded-lg p-4 flex flex-col">
+            <h1 class="font-semibold text-primary truncate mb-2">{{ actionDef.name }}</h1>
+            <div class="flex gap-1 mb-2 min-h-[20px]">
+              <span
+                v-if="actionDef.cron"
+                class="text-xs px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono"
+                :title="'Cron: ' + actionDef.cron"
+                >Cron</span
               >
-                Run
-              </button>
+              <span
+                class="text-xs px-1.5 py-0.5 bg-subtle text-body rounded font-mono"
+                :title="
+                  'Concurrency: ' +
+                  (actionDef.concurrency === 0 ? 'unlimited' : actionDef.concurrency)
+                "
+              >
+                {{ actionDef.concurrency === 0 ? "\u221e" : "x" + actionDef.concurrency }}
+              </span>
+              <span
+                class="text-xs px-1.5 py-0.5 bg-subtle text-body rounded font-mono"
+                title="Timeout"
+                >{{ formatTimeout(actionDef.timeout) }}</span
+              >
             </div>
-            <div class="space-y-2 text-sm font-mono text-muted mb-6 *:flex *:items-center *:gap-2">
-              <div><span class="text-faint">ID:</span> {{ actionDef.id }}</div>
-              <div v-if="actionDef.cron">
+            <div class="space-y-1 mb-3">
+              <div v-if="actionDef.cron" class="text-xs text-muted">
                 <span class="text-faint">Cron:</span>
                 <span class="text-accent">{{ actionDef.cron }}</span>
               </div>
-              <div v-if="actionDef.next_run">
+              <div v-if="actionDef.next_run" class="text-xs text-muted">
                 <span class="text-faint">Next run:</span>
                 <span class="text-subdued">{{ formatDate(actionDef.next_run) }}</span>
               </div>
-              <div>
+              <div class="text-xs text-dim">
                 <span class="text-faint">Last run:</span>
-                <span class="text-subdued">{{ lastRun }}</span>
+                <span class="text-muted" :title="formatDate(actionDef.last_run)">{{
+                  lastRun
+                }}</span>
                 <span
                   v-if="lastRunStatus"
                   :class="statusClass(lastRunStatus)"
-                  class="font-medium text-xs"
+                  class="ml-2 font-medium"
                   >{{ lastRunStatus }}</span
                 >
               </div>
-              <div><span class="text-faint">CWD:</span> {{ actionDef.cwd }}</div>
+              <div class="text-xs text-muted font-mono">
+                <span class="text-faint">CWD:</span> {{ actionDef.cwd }}
+              </div>
+              <div class="text-xs text-muted font-mono">
+                <span class="text-faint">ID:</span> {{ actionDef.id }}
+              </div>
             </div>
+            <button
+              @click="trigger"
+              class="w-full px-3 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded text-sm text-primary font-medium transition mt-auto"
+            >
+              Run
+            </button>
           </div>
 
-          <div>
+          <div class="lg:col-span-2">
             <div class="flex items-center justify-between mb-3">
               <h2 class="text-lg font-semibold text-subdued">Recent Executions</h2>
               <router-link

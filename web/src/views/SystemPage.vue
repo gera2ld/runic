@@ -95,10 +95,12 @@ onMounted(() => refresh());
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-        <div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+        <div class="lg:col-span-1 @container">
           <h2 class="text-lg font-semibold mb-3 text-subdued">Configuration</h2>
-          <div class="bg-surface border border-line rounded-lg p-4 space-y-2 text-sm">
+          <div
+            class="bg-surface border border-line rounded-lg p-4 grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 text-sm"
+          >
             <div v-for="(v, k) in data.config" :key="k" class="flex justify-between">
               <span class="text-dim">{{ k }}</span>
               <span class="font-mono text-subdued">{{ v }}</span>
@@ -106,7 +108,7 @@ onMounted(() => refresh());
           </div>
         </div>
 
-        <div>
+        <div class="lg:col-span-2">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-lg font-semibold text-subdued">Recent Executions</h2>
             <router-link
