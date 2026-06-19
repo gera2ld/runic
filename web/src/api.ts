@@ -12,7 +12,7 @@ export function fetchHistory(opts?: {
   actionId?: string;
 }): Promise<HistoryEntry[]> {
   const url = new URL("/api/history", location.origin);
-  if (opts?.system) url.searchParams.set("system", "true");
+  url.searchParams.set("system", opts?.system ? "true" : "false");
   if (opts?.historyIds && opts.historyIds.length > 0)
     url.searchParams.set("history_ids", opts.historyIds.join(","));
   if (opts?.actionId) url.searchParams.set("action_id", opts.actionId);
