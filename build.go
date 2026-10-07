@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -35,9 +34,7 @@ func getVersion() string {
 	if err != nil {
 		log.Fatalf("Error getting commit: %s\n", err)
 	}
-	hashStr := strings.TrimSpace(string(hash))
-	now := time.Now().UTC()
-	return fmt.Sprintf("%d.%d.%d-%s", now.Year()-2000, now.Month(), now.Day(), hashStr)
+	return strings.TrimSpace(string(hash))
 }
 
 func getItem(name string) Item {
@@ -62,14 +59,13 @@ func build() BuildResult {
 	for _, item := range args {
 		buildOs := item[0]
 		buildArch := item[1]
-		now := time.Now().UTC().Format(time.RFC3339)
 		log.Printf("Build os=%s, arch=%s\n", buildOs, buildArch)
 		name := "runic-" + buildOs + "-" + buildArch
 		cmd := exec.Command(
 			"go",
 			"build",
 			"-ldflags",
-			"-s -w -X main.version="+version+" -X main.builtAt="+now,
+			"-s -w -X main.version="+version,
 			"-trimpath",
 			"-o",
 			binDir+"/"+name,

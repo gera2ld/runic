@@ -19,6 +19,57 @@ This installs `runic` to `~/.local/bin/runic`. Add that directory to your PATH.
 
 </details>
 
+## Docker
+
+Images are published to GHCR on manual request (`Actions → Docker → Run workflow`).
+
+To build locally, compile the UI and binaries first (the image only assembles prebuilt artifacts), then build:
+
+```bash
+just build # web UI + cross-platform binaries into bin/
+docker build -t runic .
+```
+
+```bash
+docker run -d --name runic --restart unless-stopped \
+  -p 1337:1337 \
+  -v ~/.runic:/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e RUNIC_HOST=0.0.0.0 \
+  -e RUNIC_TAGS=docker,prod \
+  ghcr.io/gera2ld/runic:latest
+```
+
+Notes:
+
+- Put your `config.yml` in the mounted dir (here `~/.runic`); `runic.db` and `logs/` live next to it. The container serves `/data/config.yml` by default.
+- `RUNIC_HOST=0.0.0.0` is required — the default `127.0.0.1` is unreachable from outside the container.
+- Mounting `/var/run/docker.sock` (plus the bundled `docker` CLI) lets actions manage the host's containers, e.g.:
+
+```yaml
+actions:
+  prune:
+    command: docker image prune -f
+    cron: "0 4 * * *"
+    tags: [docker]
+```
+
+Or with compose:
+
+```yaml
+services:
+  runic:
+    image: ghcr.io/gera2ld/runic:latest
+    restart: unless-stopped
+    ports: ["1337:1337"]
+    volumes:
+      - ~/.runic:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      RUNIC_HOST: 0.0.0.0
+      RUNIC_TAGS: docker,prod
+```
+
 ## Configuration
 
 All configuration lives in a single `config.yml` file:

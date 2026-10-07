@@ -1,0 +1,10 @@
+.git/
+.jj/
+logs/
+*.db
+*.db-shm
+*.db-wal
+config.yml
+web/node_modules/
+web/dist/
+internal/server/web/dist/

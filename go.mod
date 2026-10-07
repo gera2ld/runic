@@ -1,6 +1,6 @@
 module runic
 
-go 1.26
+go 1.27
 
 require (
 	github.com/ncruces/go-sqlite3 v0.34.1

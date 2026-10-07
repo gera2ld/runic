@@ -10,20 +10,13 @@ import (
 	"runic/internal/server"
 )
 
-var (
-	version = "dev"
-	builtAt = ""
-)
+var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version", "--version", "-v":
-			fmt.Printf("runic %s", version)
-			if builtAt != "" {
-				fmt.Printf(" (built %s)", builtAt)
-			}
-			fmt.Println()
+			fmt.Printf("runic %s\n", version)
 			return
 		case "serve":
 			cmdServe(os.Args[2:])
