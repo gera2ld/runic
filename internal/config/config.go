@@ -79,6 +79,26 @@ type ActionConfig struct {
 	Cwd         string `yaml:"cwd"`
 	Cron        string `yaml:"cron"`
 	Concurrency *int   `yaml:"concurrency"`
+	Tags        TagSet `yaml:"tags"`
+}
+
+// TagSet is a list of tags an action is targeted at. It accepts a single
+// string ("*"), a list of strings, or nothing (inactive everywhere).
+// "*" matches every server.
+type TagSet []string
+
+func (t *TagSet) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err == nil {
+		*t = TagSet{s}
+		return nil
+	}
+	var list []string
+	if err := value.Decode(&list); err != nil {
+		return err
+	}
+	*t = TagSet(list)
+	return nil
 }
 
 type Config struct {
@@ -88,6 +108,7 @@ type Config struct {
 	Timeout        int                      `yaml:"timeout"`
 	DataDir        string                   `yaml:"data_dir"`
 	Actions        map[string]*ActionConfig `yaml:"actions"`
+	Tags           []string                 `yaml:"tags"`
 	ConfigPath     string                   `yaml:"-"`
 	DataDirFromEnv bool                     `yaml:"-"`
 	DBPath         string                   `yaml:"-"`
@@ -155,9 +176,28 @@ func Load(path string) (*Config, error) {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 10
 	}
+	if tags, ok := os.LookupEnv("RUNIC_TAGS"); ok && strings.TrimSpace(tags) != "" {
+		cfg.Tags = ParseTags(tags)
+	}
+	if len(cfg.Tags) == 0 {
+		// No tags declared: run everything, same as before tags existed.
+		cfg.Tags = []string{"*"}
+	}
 
 	cfg.DBPath = filepath.Join(cfg.DataDir, "runic.db")
 	cfg.LogDir = filepath.Join(cfg.DataDir, "logs")
 
 	return cfg, nil
+}
+
+// ParseTags splits a comma-separated tag list (e.g. RUNIC_TAGS) into
+// trimmed, non-empty tags.
+func ParseTags(s string) []string {
+	var tags []string
+	for _, t := range strings.Split(s, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
 }

@@ -2,10 +2,19 @@
 import { ref, onMounted } from "vue";
 import AppLayout from "../components/AppLayout.vue";
 import ExecutionTable from "../components/ExecutionTable.vue";
-import { fetchHistory, fetchSystem } from "../api";
+import { fetchHistory, fetchSystem, reloadConfig } from "../api";
 import { useActionPoller } from "../poller";
 import { patchHistory } from "../utils";
 import type { HistoryEntry } from "../utils";
+
+interface ReloadResult {
+  status: string;
+  added: string[];
+  removed: string[];
+  updated: string[];
+  backfilled: string[];
+  warning?: string;
+}
 
 interface SystemData {
   version: string;
@@ -30,6 +39,8 @@ const data = ref<SystemData>({
 });
 const history = ref<HistoryEntry[]>([]);
 const loading = ref(true);
+const reloading = ref(false);
+const reloadMsg = ref<{ ok: boolean; text: string } | null>(null);
 
 async function refresh() {
   loading.value = true;
@@ -50,6 +61,35 @@ useActionPoller(
   },
 );
 
+function summarizeReload(r: ReloadResult): string {
+  const parts: string[] = [];
+  if (r.added?.length) parts.push(`added ${r.added.join(", ")}`);
+  if (r.removed?.length) parts.push(`removed ${r.removed.join(", ")}`);
+  if (r.updated?.length) parts.push(`updated ${r.updated.join(", ")}`);
+  if (r.backfilled?.length) parts.push(`backfilled ${r.backfilled.join(", ")}`);
+  if (r.warning) parts.push(`warning: ${r.warning}`);
+  return parts.length ? `Reloaded: ${parts.join("; ")}.` : "Reloaded, no changes.";
+}
+
+async function reload() {
+  if (reloading.value) return;
+  reloading.value = true;
+  reloadMsg.value = null;
+  try {
+    const res = await reloadConfig();
+    const text = await res.text();
+    if (!res.ok) {
+      reloadMsg.value = { ok: false, text: `Reload failed (${res.status}): ${text}` };
+    } else {
+      reloadMsg.value = { ok: true, text: summarizeReload(JSON.parse(text) as ReloadResult) };
+      refresh();
+    }
+  } catch (e) {
+    reloadMsg.value = { ok: false, text: `Reload failed: ${e}` };
+  }
+  reloading.value = false;
+}
+
 onMounted(() => refresh());
 </script>
 
@@ -58,9 +98,13 @@ onMounted(() => refresh());
     <div class="flex items-center justify-between mb-2">
       <h1 class="text-2xl font-semibold">System</h1>
       <div class="flex items-center gap-3">
-        <router-link to="/actions?system=true" class="text-sm text-primary hover:underline"
-          >All System Actions</router-link
+        <button
+          @click="reload"
+          :disabled="reloading"
+          class="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-lg text-sm text-primary font-medium transition disabled:opacity-50"
         >
+          {{ reloading ? "Reloading…" : "Reload Config" }}
+        </button>
         <button
           @click="refresh"
           class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition"
@@ -68,6 +112,18 @@ onMounted(() => refresh());
           Refresh
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="reloadMsg"
+      class="text-sm rounded-lg border px-4 py-2 mb-4"
+      :class="
+        reloadMsg.ok
+          ? 'bg-surface border-line text-subdued'
+          : 'bg-status-failed/10 border-status-failed/30 text-status-failed'
+      "
+    >
+      {{ reloadMsg.text }}
     </div>
 
     <div v-if="loading" class="text-faint text-sm py-4">Loading...</div>

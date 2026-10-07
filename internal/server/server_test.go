@@ -68,6 +68,9 @@ func userActionIDs(t *testing.T, s *Server) []string {
 	}
 	ids := make([]string, 0, len(actions))
 	for _, a := range actions {
+		if strings.HasPrefix(a.ID, "@system/") {
+			continue
+		}
 		ids = append(ids, a.ID)
 	}
 	return ids
@@ -130,7 +133,7 @@ func TestReloadWarnsOnNonActionChanges(t *testing.T) {
 	if got := s.runner.Config().Timeout; got != 10 {
 		t.Fatalf("expected live timeout to stay 10 until restart, got %d", got)
 	}
-	def, err := executor.LoadAction(s.runner.Config().Actions, "a")
+	def, err := executor.LoadAction(s.runner.Config().Actions, s.runner.Config().Tags, "a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +193,37 @@ func TestReloadMissingFile(t *testing.T) {
 	}
 	if ids := userActionIDs(t, s); !equalStrings(ids, []string{"a"}) {
 		t.Fatalf("expected old config to keep serving [a], got %v", ids)
+	}
+}
+
+func TestReloadAppliesTagChanges(t *testing.T) {
+	t.Setenv("RUNIC_TAGS", "prod")
+	path := writeTestConfig(t, "timeout: 10\nactions:\n  a:\n    command: echo one\n    tags: [gpu]\n")
+	s := newTestServer(t, path)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/a/trigger", nil)
+	rec := httptest.NewRecorder()
+	s.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected manual trigger of inactive action to run, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if err := os.WriteFile(path, []byte("timeout: 10\nactions:\n  a:\n    command: echo one\n    tags: [prod]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	code, res := postReload(t, s)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if !equalStrings(res.Updated, []string{"a"}) {
+		t.Fatalf("expected [a] updated, got %+v", res)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/actions/a/trigger", nil)
+	rec = httptest.NewRecorder()
+	s.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 after retargeting, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

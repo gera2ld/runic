@@ -28,9 +28,48 @@ type ActionDef struct {
 	Cwd           string     `yaml:"cwd" json:"cwd"`
 	Cron          string     `yaml:"cron" json:"cron"`
 	Concurrency   *int       `yaml:"concurrency" json:"concurrency"`
+	Tags          []string   `yaml:"tags" json:"tags,omitempty"`
+	Active        bool       `yaml:"-" json:"active"`
+	System        bool       `yaml:"-" json:"system"`
 	NextRun       *time.Time `yaml:"-" json:"next_run,omitempty"`
 	LastRun       *time.Time `yaml:"-" json:"last_run,omitempty"`
 	LastRunStatus string     `yaml:"-" json:"last_run_status,omitempty"`
+}
+
+// TagsMatch reports whether an action with actionTags runs on a server with
+// serverTags. "*" on either side matches everything (so untagged actions
+// still run on wildcard servers, preserving pre-tags behavior), while a
+// server tagged "-" runs nothing at all. Otherwise one shared tag is enough,
+// and untagged actions never match a specifically-tagged server.
+func TagsMatch(actionTags, serverTags []string) bool {
+	if len(serverTags) == 0 {
+		// Zero value: same default as config.Load, run everything.
+		serverTags = []string{"*"}
+	}
+	if len(serverTags) == 1 && serverTags[0] == "-" {
+		return false
+	}
+	for _, s := range serverTags {
+		if s == "*" {
+			return true
+		}
+	}
+	if len(actionTags) == 0 {
+		return false
+	}
+	for _, t := range actionTags {
+		if t == "*" {
+			return true
+		}
+	}
+	for _, t := range actionTags {
+		for _, s := range serverTags {
+			if t == s {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type Runner struct {
@@ -128,10 +167,10 @@ func init() {
 	}
 }
 
-func LoadAction(actions map[string]*config.ActionConfig, actionID string) (*ActionDef, error) {
-	var sysDef *ActionDef
-	if sys, ok := SystemActions[actionID]; ok {
-		sysDef = &sys
+func LoadAction(actions map[string]*config.ActionConfig, serverTags []string, actionID string) (*ActionDef, error) {
+	isSystem := false
+	if _, ok := SystemActions[actionID]; ok {
+		isSystem = true
 	}
 
 	// Try loading from the single config file
@@ -143,11 +182,15 @@ func LoadAction(actions map[string]*config.ActionConfig, actionID string) (*Acti
 			Cwd:         raw.Cwd,
 			Cron:        raw.Cron,
 			Concurrency: raw.Concurrency,
+			Tags:        []string(raw.Tags),
 		}
 		def.ID = actionID
-		if sysDef != nil {
-			// System actions have read-only commands
-			def.Command = sysDef.Command
+		if isSystem {
+			// System actions have read-only commands and always run
+			def.Command = SystemActions[actionID].Command
+			def.Active = true
+		} else {
+			def.Active = TagsMatch(def.Tags, serverTags)
 		}
 		if def.Command == "" {
 			return nil, fmt.Errorf("action %q has no command", actionID)
@@ -157,8 +200,9 @@ func LoadAction(actions map[string]*config.ActionConfig, actionID string) (*Acti
 	}
 
 	// Try loading from system actions
-	if sysDef != nil {
-		copy := *sysDef
+	if isSystem {
+		copy := SystemActions[actionID]
+		copy.Active = true
 		return &copy, nil
 	}
 
@@ -208,11 +252,13 @@ var ErrPaused = errors.New("server is paused for reload, try again later")
 
 func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionID, payload string) (int64, error) {
 	cfg := r.Config()
-	def, err := LoadAction(cfg.Actions, actionID)
+	def, err := LoadAction(cfg.Actions, cfg.Tags, actionID)
 	if err != nil {
 		return 0, err
 	}
 	NormalizeAction(def, cfg.Timeout)
+	// Note: inactive actions are never scheduled, but a manual trigger
+	// always runs as an explicit operator override.
 	if err := r.acquire(actionID, *def.Concurrency); err != nil {
 		return 0, err
 	}
@@ -345,19 +391,20 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 	}
 }
 
-func ListActions(actions map[string]*config.ActionConfig, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
+func ListActions(actions map[string]*config.ActionConfig, serverTags []string, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
 	actionsMap := make(map[string]ActionDef)
 
 	// Load system actions first
 	for id, sys := range SystemActions {
 		def := sys
+		def.Active = true
 		NormalizeAction(&def, defaultTimeout)
 		actionsMap[id] = def
 	}
 
 	// Load from the single config file, possibly overriding system actions
 	for id := range actions {
-		def, err := LoadAction(actions, id)
+		def, err := LoadAction(actions, serverTags, id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[executor] failed to load action %s: %v\n", id, err)
 			continue
@@ -368,6 +415,7 @@ func ListActions(actions map[string]*config.ActionConfig, defaultTimeout int, d 
 
 	var list []ActionDef
 	for id, def := range actionsMap {
+		def.System = strings.HasPrefix(id, "@system/")
 		if def.Cron != "" {
 			if schedule, err := cron.ParseStandard(def.Cron); err == nil {
 				nextRun := schedule.Next(time.Now())

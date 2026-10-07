@@ -60,6 +60,9 @@ export interface ActionDef {
   cwd: string;
   cron: string | null;
   concurrency: number;
+  tags?: string[] | null;
+  active: boolean;
+  system: boolean;
   next_run: string | null;
   last_run: string | null;
   last_run_status: string | null;

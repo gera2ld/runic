@@ -96,6 +96,12 @@ watch(
             <h1 class="font-semibold text-primary truncate mb-2">{{ actionDef.name }}</h1>
             <div class="flex gap-1 mb-2 min-h-[20px]">
               <span
+                v-if="!actionDef.active"
+                class="text-xs px-1.5 py-0.5 bg-subtle text-muted rounded font-mono"
+                title="Not scheduled on this server"
+                >Inactive</span
+              >
+              <span
                 v-if="actionDef.cron"
                 class="text-xs px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono"
                 :title="'Cron: ' + actionDef.cron"
@@ -142,6 +148,13 @@ watch(
               </div>
               <div class="text-xs text-muted font-mono">
                 <span class="text-faint">ID:</span> {{ actionDef.id }}
+              </div>
+              <div v-if="actionDef.tags && actionDef.tags.length > 0" class="text-xs text-muted">
+                <span class="text-faint">Tags:</span>
+                <span class="font-mono text-subdued ml-1">{{ actionDef.tags.join(", ") }}</span>
+              </div>
+              <div v-if="!actionDef.active" class="text-xs text-faint">
+                Not scheduled on this server.
               </div>
             </div>
             <button

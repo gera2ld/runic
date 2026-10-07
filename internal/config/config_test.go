@@ -51,8 +51,81 @@ actions:
 	}
 }
 
-func TestLoadExampleConfig(t *testing.T) {
-	// The shipped example must always pass validation.
+func TestLoadServerTags(t *testing.T) {
+	// No tags anywhere: default to wildcard, same as pre-tags behavior.
+	cfg, err := Load(writeConfig(t, "timeout: 10\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Tags) != 1 || cfg.Tags[0] != "*" {
+		t.Fatalf("expected default server tags [*], got %v", cfg.Tags)
+	}
+
+	// Tags from the config file.
+	cfg, err = Load(writeConfig(t, "timeout: 10\ntags:\n  - prod\n  - gpu\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Tags) != 2 || cfg.Tags[0] != "prod" || cfg.Tags[1] != "gpu" {
+		t.Fatalf("expected file server tags [prod gpu], got %v", cfg.Tags)
+	}
+
+	// RUNIC_TAGS overrides the file, comma-separated.
+	t.Setenv("RUNIC_TAGS", "prod, gpu ,,")
+	cfg, err = Load(writeConfig(t, "timeout: 10\ntags:\n  - other\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Tags) != 2 || cfg.Tags[0] != "prod" || cfg.Tags[1] != "gpu" {
+		t.Fatalf("expected env server tags [prod gpu], got %v", cfg.Tags)
+	}
+}
+
+func TestLoadDisableAllTags(t *testing.T) {
+	t.Setenv("RUNIC_TAGS", "-")
+	cfg, err := Load(writeConfig(t, "timeout: 10\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Tags) != 1 || cfg.Tags[0] != "-" {
+		t.Fatalf("expected server tags [-], got %v", cfg.Tags)
+	}
+}
+
+func TestLoadActionTags(t *testing.T) {
+	path := writeConfig(t, `
+actions:
+  w:
+    command: echo w
+    tags: "*"
+  s:
+    command: echo s
+    tags: prod
+  l:
+    command: echo l
+    tags: [prod, gpu]
+  u:
+    command: echo u
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string(cfg.Actions["w"].Tags); len(got) != 1 || got[0] != "*" {
+		t.Fatalf("expected [*], got %v", got)
+	}
+	if got := []string(cfg.Actions["s"].Tags); len(got) != 1 || got[0] != "prod" {
+		t.Fatalf("expected [prod], got %v", got)
+	}
+	if got := []string(cfg.Actions["l"].Tags); len(got) != 2 || got[0] != "prod" || got[1] != "gpu" {
+		t.Fatalf("expected [prod gpu], got %v", got)
+	}
+	if len(cfg.Actions["u"].Tags) != 0 {
+		t.Fatalf("expected no tags, got %v", cfg.Actions["u"].Tags)
+	}
+}
+
+func TestLoadExampleConfig(t *testing.T) { // The shipped example must always pass validation.
 	if _, err := Load("../../config.example.yml"); err != nil {
 		t.Fatalf("config.example.yml failed validation: %v", err)
 	}

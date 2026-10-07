@@ -20,13 +20,21 @@ env:
 clean_days: 30   # Delete history records older than N days
 max_log_num: 100 # Keep at most N most recent log files
 
+# Tags identifying this server (also settable via RUNIC_TAGS, comma-separated,
+# which overrides this). An action runs here if any of its tags matches, or if
+# either side is "*". Unset/empty means ["*"]: everything runs.
+# Set RUNIC_TAGS=- to run nothing on this server.
+tags: ["*"]
+
 # Actions, keyed by action id.
-# Only `command` is required. `name`, `timeout`, `cwd`, `cron`, and
-# `concurrency` are optional.
+# Only `command` is required. `name`, `timeout`, `cwd`, `cron`,
+# `concurrency`, and `tags` are optional.
 # `concurrency` defaults to `1`. Set it to `0` to allow unlimited overlapping runs.
-# Restart the server after changing actions.
+# `tags` targets actions at servers: "*" runs everywhere, absent runs nowhere
+# except on wildcard servers. Restart the server after changing actions.
 actions:
   demo:
     command: |
       echo "Hello, world"
     cron: "* * * * *"
+    tags: ["*"]

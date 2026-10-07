@@ -19,10 +19,8 @@ export function fetchHistory(opts?: {
   return fetchJSON(url.pathname + url.search);
 }
 
-export function fetchActions(system?: boolean): Promise<ActionDef[]> {
-  const url = new URL("/api/actions", location.origin);
-  if (system) url.searchParams.set("system", "true");
-  return fetchJSON(url.pathname + url.search);
+export function fetchActions(): Promise<ActionDef[]> {
+  return fetchJSON("/api/actions");
 }
 
 export function fetchActionDetail(id: string): Promise<ActionDef> {
@@ -31,6 +29,10 @@ export function fetchActionDetail(id: string): Promise<ActionDef> {
 
 export function triggerAction(id: string): Promise<Response> {
   return fetch(`/api/actions/${encodeURIComponent(id)}/trigger`, { method: "POST" });
+}
+
+export function reloadConfig(): Promise<Response> {
+  return fetch(`/api/reload`, { method: "POST" });
 }
 
 export function fetchLogs(hid: number): Promise<Response> {

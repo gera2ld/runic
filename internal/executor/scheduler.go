@@ -64,7 +64,7 @@ func (s *Scheduler) syncLoop() {
 
 func (s *Scheduler) Sync() error {
 	cfg := s.runner.Config()
-	actions, err := ListActions(cfg.Actions, cfg.Timeout, s.db)
+	actions, err := ListActions(cfg.Actions, cfg.Tags, cfg.Timeout, s.db)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,8 @@ func (s *Scheduler) Sync() error {
 
 	newSpecs := make(map[string]string)
 	for _, action := range actions {
-		if action.Cron != "" {
+		// Inactive actions are never scheduled on this server.
+		if action.Active && action.Cron != "" {
 			newSpecs[action.ID] = action.Cron
 		}
 	}

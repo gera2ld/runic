@@ -37,9 +37,22 @@ actions:
     cron: "*/5 * * * *"
 ```
 
-Actions are defined under the `actions` map, keyed by action id. Only `command` is required. `name`, `timeout`, `cwd`, `cron`, and `concurrency` are optional.
+Actions are defined under the `actions` map, keyed by action id. Only `command` is required. `name`, `timeout`, `cwd`, `cron`, `concurrency`, and `tags` are optional.
 
 `concurrency` defaults to `1`. Set it to `0` to allow unlimited overlapping runs.
+
+## Multi-server targeting
+
+Give each server tags via `RUNIC_TAGS` (comma-separated, e.g. `RUNIC_TAGS=prod,gpu`) and target actions at them:
+
+```yaml
+actions:
+  deploy:
+    command: ./scripts/deploy.sh
+    tags: [prod] # or "*" for everywhere, or a single string: tags: prod
+```
+
+An action runs where any of its tags matches the server's tags. `tags: "*"` runs everywhere; an action without tags only runs on untargeted servers (no `RUNIC_TAGS`, which behaves as `*`). `RUNIC_TAGS=-` runs nothing. The UI splits actions into Active, System, and Inactive sections. Inactive actions are never scheduled, but a manual trigger always runs them.
 
 Restart the server after changing the config file.
 

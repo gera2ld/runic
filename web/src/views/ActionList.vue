@@ -1,28 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onMounted } from "vue";
 import AppLayout from "../components/AppLayout.vue";
 import ActionCard from "../components/ActionCard.vue";
-import Pagination from "../components/Pagination.vue";
 import { fetchActions } from "../api";
 import type { ActionDef } from "../utils";
 
-const route = useRoute();
 const actions = ref<ActionDef[]>([]);
 const loading = ref(true);
-const p = ref(1);
-const perPage = 10;
-const isSystem = computed(() => route.query?.system === "true");
 
-const paged = computed(() => {
-  const start = (p.value - 1) * perPage;
-  return actions.value.slice(start, start + perPage);
-});
+const activeActions = computed(() => actions.value.filter((a) => !a.system && a.active));
+const inactiveActions = computed(() => actions.value.filter((a) => !a.system && !a.active));
+const systemActions = computed(() => actions.value.filter((a) => a.system));
 
 async function refresh() {
   loading.value = true;
   try {
-    const a = await fetchActions(isSystem.value);
+    const a = await fetchActions();
     actions.value = Array.isArray(a) ? a : [];
   } catch (e) {
     console.error(e);
@@ -32,30 +25,51 @@ async function refresh() {
 }
 
 onMounted(() => refresh());
-watch(
-  () => route.query.system,
-  () => {
-    p.value = 1;
-    refresh();
-  },
-);
 </script>
 
 <template>
   <AppLayout>
-    <h1 class="text-2xl font-semibold mb-6">{{ isSystem ? "System Actions" : "Actions" }}</h1>
+    <h1 class="text-2xl font-semibold mb-6">Actions</h1>
     <div v-if="loading" class="text-faint text-sm">Loading...</div>
-    <div
-      v-else-if="actions.length === 0"
-      class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center"
-    >
-      No actions found.
-    </div>
-    <div v-if="!loading && actions.length > 0">
-      <Pagination v-model="p" :total="actions.length" :pageSize="perPage" />
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        <ActionCard v-for="a in paged" :key="a.id" :action="a" @triggered="refresh" />
+    <template v-else>
+      <h2 class="text-lg font-semibold text-subdued mb-3">
+        Active <span class="text-faint font-normal text-sm">({{ activeActions.length }})</span>
+      </h2>
+      <div
+        v-if="activeActions.length === 0"
+        class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center mb-8"
+      >
+        No active actions on this server.
       </div>
-    </div>
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+        <ActionCard v-for="a in activeActions" :key="a.id" :action="a" @triggered="refresh" />
+      </div>
+
+      <h2 class="text-lg font-semibold text-subdued mb-3">
+        System <span class="text-faint font-normal text-sm">({{ systemActions.length }})</span>
+      </h2>
+      <div
+        v-if="systemActions.length === 0"
+        class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center mb-8"
+      >
+        No system actions.
+      </div>
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+        <ActionCard v-for="a in systemActions" :key="a.id" :action="a" @triggered="refresh" />
+      </div>
+
+      <h2 class="text-lg font-semibold text-subdued mb-3">
+        Inactive <span class="text-faint font-normal text-sm">({{ inactiveActions.length }})</span>
+      </h2>
+      <div
+        v-if="inactiveActions.length === 0"
+        class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-6 text-center"
+      >
+        No inactive actions.
+      </div>
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <ActionCard v-for="a in inactiveActions" :key="a.id" :action="a" @triggered="refresh" />
+      </div>
+    </template>
   </AppLayout>
 </template>

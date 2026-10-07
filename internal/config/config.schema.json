@@ -42,6 +42,11 @@
       "type": "object",
       "description": "Actions keyed by id. Ids must not start with '@' (reserved for system actions).",
       "additionalProperties": { "$ref": "#/$defs/action" }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags identifying this server. An action runs here if any of its tags matches. Overridden by RUNIC_TAGS."
     }
   },
   "$defs": {
@@ -67,6 +72,14 @@
         "concurrency": {
           "type": "integer",
           "description": "Max overlapping runs. Defaults to 1; 0 means unlimited."
+        },
+        "tags": {
+          "description": "Which servers run this action. \"*\" runs everywhere; absent runs nowhere. Otherwise runs where any tag matches the server's tags.",
+          "anyOf": [
+            { "const": "*" },
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         }
       }
     }

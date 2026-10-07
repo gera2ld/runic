@@ -204,7 +204,7 @@ func (s *Server) handleGetAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := s.runner.Config()
-	def, err := executor.LoadAction(cfg.Actions, id)
+	def, err := executor.LoadAction(cfg.Actions, cfg.Tags, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -252,9 +252,8 @@ func (s *Server) handleTriggerAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
-	isSystem := r.URL.Query().Get("system") == "true"
 	cfg := s.runner.Config()
-	actions, err := executor.ListActions(cfg.Actions, cfg.Timeout, s.db)
+	actions, err := executor.ListActions(cfg.Actions, cfg.Tags, cfg.Timeout, s.db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -263,16 +262,8 @@ func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
 		actions = []executor.ActionDef{}
 	}
 
-	filtered := make([]executor.ActionDef, 0)
-	for _, a := range actions {
-		sys := strings.HasPrefix(a.ID, "@system/")
-		if isSystem == sys {
-			filtered = append(filtered, a)
-		}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filtered)
+	json.NewEncoder(w).Encode(actions)
 }
 
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
@@ -319,6 +310,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 			"log_dir":     cfg.LogDir,
 			"clean_days":  cfg.CleanDays,
 			"max_log_num": cfg.MaxLogNum,
+			"tags":        cfg.Tags,
 		},
 		"environment": env,
 	})
@@ -369,10 +361,10 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 // is validated first, then new runs are paused, in-flight runs are drained,
 // the new actions are swapped in, the scheduler is re-synced, runs resume,
 // and ticks missed during the pause are backfilled with one catch-up run
-// each. Only changes under "actions" take effect; anything else is reported
-// in the response warning and needs a restart. Unchanged scheduler entries
-// are left untouched, so scheduling resumes where it paused. On any failure
-// the previous config keeps serving.
+// each. Only changes under "actions" and server "tags" take effect;
+// anything else is reported in the response warning and needs a restart.
+// Unchanged scheduler entries are left untouched, so scheduling resumes
+// where it paused. On any failure the previous config keeps serving.
 func (s *Server) reload() (*reloadResult, error) {
 	if !s.reloadMu.TryLock() {
 		return nil, ErrReloadInProgress
@@ -397,10 +389,11 @@ func (s *Server) reload() (*reloadResult, error) {
 		return res, nil
 	}
 
-	// Merge: only actions are hot-loaded, everything else keeps serving
-	// the current values until restart.
+	// Merge: only actions and server tags are hot-loaded, everything else
+	// keeps serving the current values until restart.
 	merged := *cur
 	merged.Actions = next.Actions
+	merged.Tags = next.Tags
 
 	s.runner.Pause()
 	s.runner.WaitIdle()

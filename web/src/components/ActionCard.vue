@@ -19,14 +19,23 @@ async function trigger(id: string) {
 </script>
 
 <template>
-  <div class="bg-surface border border-line rounded-lg p-4 flex flex-col">
+  <div
+    class="bg-surface border border-line rounded-lg p-4 flex flex-col"
+    :class="{ 'opacity-60': !action.active }"
+  >
     <router-link
       :to="actionUrl(action.id)"
       class="font-semibold text-primary hover:underline truncate mb-2"
     >
       {{ action.name || action.id }}
     </router-link>
-    <div class="flex gap-1 mb-2 min-h-[20px]">
+    <div class="flex gap-1 mb-2 min-h-[20px] flex-wrap">
+      <span
+        v-if="!action.active"
+        class="text-xs px-1.5 py-0.5 bg-subtle text-muted rounded font-mono"
+        title="Not scheduled on this server"
+        >Inactive</span
+      >
       <span
         v-if="action.cron"
         class="text-xs px-1.5 py-0.5 bg-accent/10 text-accent-dim rounded font-mono"
@@ -42,6 +51,13 @@ async function trigger(id: string) {
       <span class="text-xs px-1.5 py-0.5 bg-subtle text-body rounded font-mono">{{
         formatTimeout(action.timeout)
       }}</span>
+      <span
+        v-for="t in action.tags || []"
+        :key="t"
+        class="text-xs px-1.5 py-0.5 bg-subtle text-muted rounded font-mono"
+        :title="'Tag: ' + t"
+        >{{ t }}</span
+      >
     </div>
     <div class="space-y-2 mb-3">
       <div v-if="action.next_run" class="text-xs text-muted">
@@ -67,5 +83,6 @@ async function trigger(id: string) {
     >
       Run
     </button>
+    <div v-if="!action.active" class="text-xs text-faint pt-1">Not scheduled on this server.</div>
   </div>
 </template>
