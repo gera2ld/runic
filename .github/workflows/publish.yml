@@ -23,8 +23,6 @@ jobs:
         working-directory: web
       - name: Build
         run: go run build.go
-        env:
-          BUILD_REPO: ${{ github.repository }}
       - name: Create Latest Release
         run: |
           VERSION=$(cat bin/version.txt)

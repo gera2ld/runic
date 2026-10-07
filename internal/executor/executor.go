@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -21,27 +21,62 @@ import (
 )
 
 type ActionDef struct {
-	ID          string     `yaml:"-" json:"id"`
-	Name        string     `yaml:"name" json:"name"`
-	Timeout     int        `yaml:"timeout" json:"timeout"`
-	Command     string     `yaml:"command" json:"command"`
-	Cwd         string     `yaml:"cwd" json:"cwd"`
-	Cron        string     `yaml:"cron" json:"cron"`
-	Concurrency *int       `yaml:"concurrency" json:"concurrency"`
-	NextRun     *time.Time `yaml:"-" json:"next_run,omitempty"`
-	LastRun     *time.Time `yaml:"-" json:"last_run,omitempty"`
-	LastRunStatus string   `yaml:"-" json:"last_run_status,omitempty"`
+	ID            string     `yaml:"-" json:"id"`
+	Name          string     `yaml:"name" json:"name"`
+	Timeout       int        `yaml:"timeout" json:"timeout"`
+	Command       string     `yaml:"command" json:"command"`
+	Cwd           string     `yaml:"cwd" json:"cwd"`
+	Cron          string     `yaml:"cron" json:"cron"`
+	Concurrency   *int       `yaml:"concurrency" json:"concurrency"`
+	NextRun       *time.Time `yaml:"-" json:"next_run,omitempty"`
+	LastRun       *time.Time `yaml:"-" json:"last_run,omitempty"`
+	LastRunStatus string     `yaml:"-" json:"last_run_status,omitempty"`
 }
 
 type Runner struct {
-	cfg    *config.Config
+	cfg    atomic.Pointer[config.Config]
 	db     *db.DB
 	mu     sync.Mutex
 	active map[string]int
+	paused bool
+	wg     sync.WaitGroup
 }
 
 func NewRunner(cfg *config.Config, d *db.DB) *Runner {
-	return &Runner{cfg: cfg, db: d, active: make(map[string]int)}
+	r := &Runner{db: d, active: make(map[string]int)}
+	r.cfg.Store(cfg)
+	return r
+}
+
+// Config returns the currently active config.
+func (r *Runner) Config() *config.Config {
+	return r.cfg.Load()
+}
+
+// SwapConfig replaces the active config. Callers must pause the runner and
+// drain in-flight runs first; see Pause and WaitIdle.
+func (r *Runner) SwapConfig(cfg *config.Config) {
+	r.cfg.Store(cfg)
+}
+
+// Pause rejects new runs until Resume is called.
+func (r *Runner) Pause() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.paused = true
+}
+
+// Resume accepts new runs again.
+func (r *Runner) Resume() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.paused = false
+}
+
+// WaitIdle blocks until all in-flight runs have settled. It must be called
+// after Pause, so no new runs can start while waiting.
+func (r *Runner) WaitIdle() {
+	r.wg.Wait()
 }
 
 func NormalizeAction(def *ActionDef, defaultTimeout int) {
@@ -93,19 +128,21 @@ func init() {
 	}
 }
 
-func LoadAction(actionDir, actionID string) (*ActionDef, error) {
+func LoadAction(actions map[string]*config.ActionConfig, actionID string) (*ActionDef, error) {
 	var sysDef *ActionDef
 	if sys, ok := SystemActions[actionID]; ok {
 		sysDef = &sys
 	}
 
-	// Try loading from file
-	path := filepath.Join(actionDir, actionID+".yml")
-	data, err := os.ReadFile(path)
-	if err == nil {
-		var def ActionDef
-		if err := yaml.Unmarshal(data, &def); err != nil {
-			return nil, fmt.Errorf("failed to parse action YAML: %w", err)
+	// Try loading from the single config file
+	if raw, ok := actions[actionID]; ok && raw != nil {
+		def := ActionDef{
+			Name:        raw.Name,
+			Timeout:     raw.Timeout,
+			Command:     raw.Command,
+			Cwd:         raw.Cwd,
+			Cron:        raw.Cron,
+			Concurrency: raw.Concurrency,
 		}
 		def.ID = actionID
 		if sysDef != nil {
@@ -125,22 +162,24 @@ func LoadAction(actionDir, actionID string) (*ActionDef, error) {
 		return &copy, nil
 	}
 
-	return nil, fmt.Errorf("action %q not found: %w", actionID, err)
+	return nil, fmt.Errorf("action %q not found", actionID)
 }
 
-func (r *Runner) tryAcquire(actionID string, limit int) bool {
-	if limit <= 0 {
-		return true
-	}
-
+func (r *Runner) acquire(actionID string, limit int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.active[actionID] >= limit {
-		return false
+	if r.paused {
+		return fmt.Errorf("%w: %s", ErrPaused, actionID)
 	}
-	r.active[actionID]++
-	return true
+	if limit > 0 {
+		if r.active[actionID] >= limit {
+			return fmt.Errorf("%w: %s", ErrConcurrencyLimitReached, actionID)
+		}
+		r.active[actionID]++
+	}
+	r.wg.Add(1)
+	return nil
 }
 
 func (r *Runner) release(actionID string) {
@@ -149,9 +188,10 @@ func (r *Runner) release(actionID string) {
 
 	if r.active[actionID] <= 1 {
 		delete(r.active, actionID)
-		return
+	} else {
+		r.active[actionID]--
 	}
-	r.active[actionID]--
+	r.wg.Done()
 }
 
 type RunResult struct {
@@ -164,14 +204,17 @@ type RunResult struct {
 
 var ErrConcurrencyLimitReached = errors.New("action concurrency limit reached")
 
-func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionDir, actionID, payload string) (int64, error) {
-	def, err := LoadAction(actionDir, actionID)
+var ErrPaused = errors.New("server is paused for reload, try again later")
+
+func (r *Runner) RunAction(ctx context.Context, d *db.DB, logDir, actionID, payload string) (int64, error) {
+	cfg := r.Config()
+	def, err := LoadAction(cfg.Actions, actionID)
 	if err != nil {
 		return 0, err
 	}
-	NormalizeAction(def, r.cfg.Timeout)
-	if !r.tryAcquire(actionID, *def.Concurrency) {
-		return 0, fmt.Errorf("%w: %s", ErrConcurrencyLimitReached, actionID)
+	NormalizeAction(def, cfg.Timeout)
+	if err := r.acquire(actionID, *def.Concurrency); err != nil {
+		return 0, err
 	}
 
 	sl, err := logmgr.NewStreamLogger(logDir, actionID)
@@ -214,8 +257,9 @@ func (r *Runner) runInternalCommand(ctx context.Context, def *ActionDef, sl *log
 	cmd := strings.TrimPrefix(def.Command, "@internal:")
 	switch cmd {
 	case "clean-logs":
-		fmt.Fprintf(sl.Writer(), "[system] starting log cleanup (days=%d, max_logs=%d)\n", r.cfg.CleanDays, r.cfg.MaxLogNum)
-		err = logmgr.Clean(r.cfg.LogDir, r.db, r.cfg.CleanDays, r.cfg.MaxLogNum)
+		cfg := r.Config()
+		fmt.Fprintf(sl.Writer(), "[system] starting log cleanup (days=%d, max_logs=%d)\n", cfg.CleanDays, cfg.MaxLogNum)
+		err = logmgr.Clean(cfg.LogDir, r.db, cfg.CleanDays, cfg.MaxLogNum)
 		if err == nil {
 			fmt.Fprintf(sl.Writer(), "[system] log cleanup completed\n")
 		}
@@ -242,9 +286,10 @@ func (r *Runner) runInternalCommand(ctx context.Context, def *ActionDef, sl *log
 }
 
 func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.StreamLogger, payload, actionID string) RunResult {
+	cfg := r.Config()
 	timeout := time.Duration(def.Timeout) * time.Second
 	if timeout <= 0 {
-		timeout = time.Duration(r.cfg.Timeout) * time.Second
+		timeout = time.Duration(cfg.Timeout) * time.Second
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -258,7 +303,7 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 	cmd := exec.CommandContext(runCtx, "bash", "-c", def.Command)
 	cmd.Dir = cwd
 	cmd.Env = os.Environ()
-	for k, v := range r.cfg.Env {
+	for k, v := range cfg.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.Env = append(cmd.Env, fmt.Sprintf("RUNIC_ACTION_ID=%s", actionID))
@@ -300,7 +345,7 @@ func (r *Runner) runCommand(ctx context.Context, def *ActionDef, sl *logmgr.Stre
 	}
 }
 
-func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
+func ListActions(actions map[string]*config.ActionConfig, defaultTimeout int, d *db.DB) ([]ActionDef, error) {
 	actionsMap := make(map[string]ActionDef)
 
 	// Load system actions first
@@ -310,27 +355,18 @@ func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, e
 		actionsMap[id] = def
 	}
 
-	// Load from disk, possibly overriding system actions
-	filepath.WalkDir(actionDir, func(path string, e os.DirEntry, err error) error {
-		if err != nil || e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
-			return nil
-		}
-		rel, err := filepath.Rel(actionDir, path)
-		if err != nil {
-			return nil
-		}
-		id := strings.TrimSuffix(rel, ".yml")
-		def, err := LoadAction(actionDir, id)
+	// Load from the single config file, possibly overriding system actions
+	for id := range actions {
+		def, err := LoadAction(actions, id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[executor] failed to load action %s: %v\n", id, err)
-			return nil
+			continue
 		}
 		NormalizeAction(def, defaultTimeout)
 		actionsMap[id] = *def
-		return nil
-	})
+	}
 
-	var actions []ActionDef
+	var list []ActionDef
 	for id, def := range actionsMap {
 		if def.Cron != "" {
 			if schedule, err := cron.ParseStandard(def.Cron); err == nil {
@@ -345,10 +381,10 @@ func ListActions(actionDir string, defaultTimeout int, d *db.DB) ([]ActionDef, e
 				def.LastRunStatus = lastRun.Status
 			}
 		}
-		actions = append(actions, def)
+		list = append(list, def)
 	}
-	sort.Slice(actions, func(i, j int) bool {
-		return actions[i].ID < actions[j].ID
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].ID < list[j].ID
 	})
-	return actions, nil
+	return list, nil
 }

@@ -8,7 +8,6 @@ import (
 	"runic/internal/db"
 	"runic/internal/executor"
 	"runic/internal/server"
-	"runic/internal/update"
 )
 
 var (
@@ -26,11 +25,8 @@ func main() {
 			}
 			fmt.Println()
 			return
-		case "update":
-			cmdUpdate()
-			return
 		case "serve":
-			cmdServe()
+			cmdServe(os.Args[2:])
 			return
 		}
 	}
@@ -38,40 +34,43 @@ func main() {
 	printUsage()
 }
 
-func cmdUpdate() {
-	if update.Repo == "" {
-		fmt.Fprintln(os.Stderr, "[update] update command requires a release build with REPO ldflag")
-		fmt.Fprintln(os.Stderr, "[update] set BUILD_REPO env var when building, e.g.: BUILD_REPO=gera2ld/runic go run build.go")
-		os.Exit(1)
+func resolveConfigPath(args []string) (string, bool, error) {
+	path := os.Getenv("RUNIC_CONFIG")
+	explicit := path != ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--config", "-c":
+			if i+1 >= len(args) {
+				return "", false, fmt.Errorf("flag %s requires a value", args[i])
+			}
+			path = args[i+1]
+			explicit = true
+			i++
+		default:
+			return "", false, fmt.Errorf("unknown argument: %s", args[i])
+		}
 	}
-
-	fmt.Print("[update] checking for updates... ")
-	latest, _, err := update.CheckLatest()
-	if err != nil {
-		fmt.Println()
-		fmt.Fprintf(os.Stderr, "[error] %v\n", err)
-		os.Exit(1)
+	if path == "" {
+		path = "config.yml"
 	}
-	if latest == "" {
-		fmt.Println("no release found")
-		os.Exit(1)
-	}
-	fmt.Println("latest: " + latest)
-
-	if latest == version {
-		fmt.Println("[update] already up to date")
-		return
-	}
-
-	fmt.Printf("[update] upgrading from %s to %s...\n", version, latest)
-	if err := update.Install(); err != nil {
-		fmt.Fprintf(os.Stderr, "[error] %v\n", err)
-		os.Exit(1)
-	}
+	return path, explicit, nil
 }
 
-func cmdServe() {
-	cfg, err := config.Load("config.yml")
+func cmdServe(args []string) {
+	configPath, explicit, err := resolveConfigPath(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[error] %v\n", err)
+		printUsage()
+		os.Exit(1)
+	}
+	if explicit {
+		if _, err := os.Stat(configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "[error] config file not found: %s\n", configPath)
+			os.Exit(1)
+		}
+	}
+
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[error] invalid config: %v\n", err)
 		os.Exit(1)
@@ -85,7 +84,7 @@ func cmdServe() {
 	defer database.Close()
 
 	runner := executor.NewRunner(cfg, database)
-	sched := executor.NewScheduler(runner, database, cfg.ActionDir, cfg.LogDir)
+	sched := executor.NewScheduler(runner, database, cfg.LogDir)
 	sched.Start()
 	defer sched.Stop()
 
@@ -96,8 +95,7 @@ func printUsage() {
 	fmt.Printf(`runic %s
 
 Usage:
-  runic serve     Start the server
-  runic update    Check and install latest release
-  runic version   Show version information
+  runic serve [--config <path>]   Start the server (default config: config.yml)
+  runic version                   Show version information
 `, version)
 }

@@ -9,10 +9,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"runic/internal/config"
@@ -28,6 +30,7 @@ type Server struct {
 	db        *db.DB
 	runner    *executor.Runner
 	sched     *executor.Scheduler
+	reloadMu  sync.Mutex
 	startTime time.Time
 }
 
@@ -40,8 +43,23 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executo
 		startTime: time.Now(),
 	}
 
-	os.MkdirAll(cfg.ActionDir, 0755)
+	os.MkdirAll(cfg.LogDir, 0755)
 
+	fmt.Printf("[server] listening on %s:%s\n", cfg.Host, cfg.Port)
+	srv := &http.Server{
+		Addr:         cfg.Host + ":" + cfg.Port,
+		Handler:      s.handler(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
+		fmt.Fprintf(os.Stderr, "[server] fatal: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", s.handleIndex)
@@ -51,20 +69,10 @@ func Serve(cfg *config.Config, runner *executor.Runner, d *db.DB, sched *executo
 	mux.HandleFunc("GET /api/actions/{id}", s.handleGetAction)
 	mux.HandleFunc("POST /api/actions/{id}/trigger", s.handleTriggerAction)
 	mux.HandleFunc("POST /api/clean", s.handleClean)
+	mux.HandleFunc("POST /api/reload", s.handleReload)
 	mux.HandleFunc("GET /api/system", s.handleSystem)
 
-	fmt.Printf("[server] listening on %s:%s\n", cfg.Host, cfg.Port)
-	srv := &http.Server{
-		Addr:         cfg.Host + ":" + cfg.Port,
-		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-	if err := srv.ListenAndServe(); err != nil {
-		fmt.Fprintf(os.Stderr, "[server] fatal: %v\n", err)
-		os.Exit(1)
-	}
+	return mux
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -195,12 +203,13 @@ func (s *Server) handleGetAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing action id", http.StatusBadRequest)
 		return
 	}
-	def, err := executor.LoadAction(s.cfg.ActionDir, id)
+	cfg := s.runner.Config()
+	def, err := executor.LoadAction(cfg.Actions, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	executor.NormalizeAction(def, s.cfg.Timeout)
+	executor.NormalizeAction(def, cfg.Timeout)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(def)
 }
@@ -220,8 +229,12 @@ func (s *Server) handleTriggerAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	historyID, err := s.runner.RunAction(context.Background(), s.db, s.cfg.LogDir, s.cfg.ActionDir, id, payload)
+	historyID, err := s.runner.RunAction(context.Background(), s.db, s.runner.Config().LogDir, id, payload)
 	if err != nil {
+		if errors.Is(err, executor.ErrPaused) {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		if errors.Is(err, executor.ErrConcurrencyLimitReached) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -240,7 +253,8 @@ func (s *Server) handleTriggerAction(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
 	isSystem := r.URL.Query().Get("system") == "true"
-	actions, err := executor.ListActions(s.cfg.ActionDir, s.cfg.Timeout, s.db)
+	cfg := s.runner.Config()
+	actions, err := executor.ListActions(cfg.Actions, cfg.Timeout, s.db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -289,34 +303,169 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
+	cfg := s.runner.Config()
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"version":   runtime.Version(),
-		"os":        runtime.GOOS,
-		"arch":      runtime.GOARCH,
-		"uptime":    time.Since(s.startTime).String(),
+		"version":    runtime.Version(),
+		"os":         runtime.GOOS,
+		"arch":       runtime.GOARCH,
+		"uptime":     time.Since(s.startTime).String(),
 		"goroutines": runtime.NumGoroutine(),
-		"cpus":      runtime.NumCPU(),
+		"cpus":       runtime.NumCPU(),
 		"config": map[string]interface{}{
-			"host":        s.cfg.Host,
-			"port":        s.cfg.Port,
-			"timeout":     s.cfg.Timeout,
-			"data_dir":    s.cfg.DataDir,
-			"log_dir":     s.cfg.LogDir,
-			"action_dir":  s.cfg.ActionDir,
-			"clean_days":  s.cfg.CleanDays,
-			"max_log_num": s.cfg.MaxLogNum,
+			"host":        cfg.Host,
+			"port":        cfg.Port,
+			"timeout":     cfg.Timeout,
+			"data_dir":    cfg.DataDir,
+			"log_dir":     cfg.LogDir,
+			"clean_days":  cfg.CleanDays,
+			"max_log_num": cfg.MaxLogNum,
 		},
 		"environment": env,
 	})
 }
 
 func (s *Server) handleClean(w http.ResponseWriter, r *http.Request) {
-	id, err := s.runner.RunAction(r.Context(), s.db, s.cfg.LogDir, s.cfg.ActionDir, "@system/clean-logs", "")
+	id, err := s.runner.RunAction(r.Context(), s.db, s.runner.Config().LogDir, "@system/clean-logs", "")
 	if err != nil {
+		if errors.Is(err, executor.ErrPaused) {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int64{"history_id": id})
+}
+
+var ErrReloadInProgress = errors.New("reload already in progress")
+
+type reloadResult struct {
+	Status     string   `json:"status"`
+	Added      []string `json:"added"`
+	Removed    []string `json:"removed"`
+	Updated    []string `json:"updated"`
+	Backfilled []string `json:"backfilled"`
+	Warning    string   `json:"warning,omitempty"`
+}
+
+func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
+	res, err := s.reload()
+	if err != nil {
+		if errors.Is(err, ErrReloadInProgress) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+// reload re-reads the config file and applies it gracefully: the new config
+// is validated first, then new runs are paused, in-flight runs are drained,
+// the new actions are swapped in, the scheduler is re-synced, runs resume,
+// and ticks missed during the pause are backfilled with one catch-up run
+// each. Only changes under "actions" take effect; anything else is reported
+// in the response warning and needs a restart. Unchanged scheduler entries
+// are left untouched, so scheduling resumes where it paused. On any failure
+// the previous config keeps serving.
+func (s *Server) reload() (*reloadResult, error) {
+	if !s.reloadMu.TryLock() {
+		return nil, ErrReloadInProgress
+	}
+	defer s.reloadMu.Unlock()
+
+	path := s.cfg.ConfigPath
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("config file not found: %s, keeping current config", path)
+	}
+	next, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	cur := s.runner.Config()
+
+	res := diffActions(cur.Actions, next.Actions)
+	if changed := nonActionChanges(cur, next); len(changed) > 0 {
+		res.Warning = fmt.Sprintf("restart required for: %s", strings.Join(changed, ", "))
+	}
+	if len(res.Added) == 0 && len(res.Removed) == 0 && len(res.Updated) == 0 {
+		return res, nil
+	}
+
+	// Merge: only actions are hot-loaded, everything else keeps serving
+	// the current values until restart.
+	merged := *cur
+	merged.Actions = next.Actions
+
+	s.runner.Pause()
+	s.runner.WaitIdle()
+	s.runner.SwapConfig(&merged)
+	syncErr := s.sched.Sync()
+	s.runner.Resume()
+	if syncErr != nil {
+		return nil, syncErr
+	}
+	res.Backfilled = s.sched.Backfill()
+	return res, nil
+}
+
+// nonActionChanges returns the names of config fields outside "actions"
+// that differ between cur and next.
+func nonActionChanges(cur, next *config.Config) []string {
+	var changed []string
+	if cur.Host != next.Host {
+		changed = append(changed, "host")
+	}
+	if cur.Port != next.Port {
+		changed = append(changed, "port")
+	}
+	if !reflect.DeepEqual(cur.Env, next.Env) {
+		changed = append(changed, "env")
+	}
+	if cur.Timeout != next.Timeout {
+		changed = append(changed, "timeout")
+	}
+	if cur.DataDir != next.DataDir {
+		changed = append(changed, "data_dir")
+	}
+	if cur.CleanDays != next.CleanDays {
+		changed = append(changed, "clean_days")
+	}
+	if cur.MaxLogNum != next.MaxLogNum {
+		changed = append(changed, "max_log_num")
+	}
+	return changed
+}
+
+func diffActions(old, next map[string]*config.ActionConfig) *reloadResult {
+	res := &reloadResult{Status: "ok", Added: []string{}, Removed: []string{}, Updated: []string{}, Backfilled: []string{}}
+	for id, n := range next {
+		o, ok := old[id]
+		if !ok {
+			res.Added = append(res.Added, id)
+		} else if !actionConfigsEqual(o, n) {
+			res.Updated = append(res.Updated, id)
+		}
+	}
+	for id := range old {
+		if _, ok := next[id]; !ok {
+			res.Removed = append(res.Removed, id)
+		}
+	}
+	sort.Strings(res.Added)
+	sort.Strings(res.Removed)
+	sort.Strings(res.Updated)
+	return res
+}
+
+func actionConfigsEqual(a, b *config.ActionConfig) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return reflect.DeepEqual(*a, *b)
 }

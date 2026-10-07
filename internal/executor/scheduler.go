@@ -2,34 +2,38 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
-	"runic/internal/db"
 	"github.com/robfig/cron/v3"
+	"runic/internal/db"
 )
 
 type Scheduler struct {
-	cron      *cron.Cron
-	runner    *Runner
-	db        *db.DB
-	actionDir string
-	logDir    string
-	entries   map[string]cron.EntryID
-	specs     map[string]string
-	mu        sync.Mutex
+	cron    *cron.Cron
+	runner  *Runner
+	db      *db.DB
+	logDir  string
+	entries map[string]cron.EntryID
+	specs   map[string]string
+	// missed records actions whose ticks fired while the runner was paused
+	// for reload. They get one catch-up run each on Backfill.
+	missed map[string]struct{}
+	mu     sync.Mutex
 }
 
-func NewScheduler(runner *Runner, db *db.DB, actionDir, logDir string) *Scheduler {
+func NewScheduler(runner *Runner, db *db.DB, logDir string) *Scheduler {
 	return &Scheduler{
-		cron:      cron.New(),
-		runner:    runner,
-		db:        db,
-		actionDir: actionDir,
-		logDir:    logDir,
-		entries:   make(map[string]cron.EntryID),
-		specs:     make(map[string]string),
+		cron:    cron.New(),
+		runner:  runner,
+		db:      db,
+		logDir:  logDir,
+		entries: make(map[string]cron.EntryID),
+		specs:   make(map[string]string),
+		missed:  make(map[string]struct{}),
 	}
 }
 
@@ -59,7 +63,8 @@ func (s *Scheduler) syncLoop() {
 }
 
 func (s *Scheduler) Sync() error {
-	actions, err := ListActions(s.actionDir, s.runner.cfg.Timeout, s.db)
+	cfg := s.runner.Config()
+	actions, err := ListActions(cfg.Actions, cfg.Timeout, s.db)
 	if err != nil {
 		return err
 	}
@@ -91,8 +96,15 @@ func (s *Scheduler) Sync() error {
 			actionID := id // capture for closure
 			entryID, err := s.cron.AddFunc(spec, func() {
 				log.Printf("[scheduler] triggering action: %s\n", actionID)
-				_, err := s.runner.RunAction(context.Background(), s.db, s.logDir, s.actionDir, actionID, "")
+				_, err := s.runner.RunAction(context.Background(), s.db, s.logDir, actionID, "")
 				if err != nil {
+					if errors.Is(err, ErrPaused) {
+						log.Printf("[scheduler] missed tick for %s during reload pause, will backfill on resume\n", actionID)
+						s.mu.Lock()
+						s.missed[actionID] = struct{}{}
+						s.mu.Unlock()
+						return
+					}
 					log.Printf("[scheduler] failed to trigger action %s: %v\n", actionID, err)
 				}
 			})
@@ -107,4 +119,27 @@ func (s *Scheduler) Sync() error {
 	}
 
 	return nil
+}
+
+// Backfill queues one catch-up run for each action that missed ticks while
+// the runner was paused. It must be called after Resume, runs against the
+// current config (a removed action is skipped), and returns the ids it
+// attempted, sorted.
+func (s *Scheduler) Backfill() []string {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.missed))
+	for id := range s.missed {
+		ids = append(ids, id)
+	}
+	s.missed = make(map[string]struct{})
+	s.mu.Unlock()
+
+	sort.Strings(ids)
+	for _, id := range ids {
+		log.Printf("[scheduler] backfilling missed ticks for action: %s\n", id)
+		if _, err := s.runner.RunAction(context.Background(), s.db, s.logDir, id, ""); err != nil {
+			log.Printf("[scheduler] backfill failed for action %s: %v\n", id, err)
+		}
+	}
+	return ids
 }

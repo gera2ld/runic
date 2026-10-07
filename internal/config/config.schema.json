@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/gera2ld/runic/main/internal/config/config.schema.json",
+  "title": "runic configuration file",
+  "description": "Single-file configuration for the runic scheduler. Validated on startup; unknown fields are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "Address to bind the server to."
+    },
+    "port": {
+      "description": "Port to listen on (1-65535).",
+      "anyOf": [
+        { "type": "string", "pattern": "^[0-9]{1,5}$" },
+        { "type": "integer", "minimum": 1, "maximum": 65535 }
+      ]
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment variables injected into all action commands.",
+      "additionalProperties": { "type": "string" }
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "Global action timeout in seconds (per-action timeout overrides this)."
+    },
+    "data_dir": {
+      "type": "string",
+      "description": "Directory holding runic.db and logs. Relative paths resolve against the config file's directory."
+    },
+    "clean_days": {
+      "type": "integer",
+      "description": "Delete history records older than N days."
+    },
+    "max_log_num": {
+      "type": "integer",
+      "description": "Keep at most N most recent log files."
+    },
+    "actions": {
+      "type": "object",
+      "description": "Actions keyed by id. Ids must not start with '@' (reserved for system actions).",
+      "additionalProperties": { "$ref": "#/$defs/action" }
+    }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "name": { "type": "string" },
+        "timeout": {
+          "type": "integer",
+          "description": "Per-action timeout in seconds, overrides the global timeout."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": { "type": "string" },
+        "cron": {
+          "type": "string",
+          "description": "Standard 5-field cron expression. Must be quoted if it starts with '*'."
+        },
+        "concurrency": {
+          "type": "integer",
+          "description": "Max overlapping runs. Defaults to 1; 0 means unlimited."
+        }
+      }
+    }
+  }
+}

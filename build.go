@@ -69,7 +69,7 @@ func build() BuildResult {
 			"go",
 			"build",
 			"-ldflags",
-			"-s -w -X main.version="+version+" -X main.builtAt="+now+getRepoLDFlag(),
+			"-s -w -X main.version="+version+" -X main.builtAt="+now,
 			"-trimpath",
 			"-o",
 			binDir+"/"+name,
@@ -88,14 +88,6 @@ func build() BuildResult {
 	os.WriteFile(binDir+"/version.txt", []byte(version), 0644)
 	log.Printf("Wrote version to %s/version.txt\n", binDir)
 	return result
-}
-
-func getRepoLDFlag() string {
-	repo := os.Getenv("BUILD_REPO")
-	if repo == "" {
-		return ""
-	}
-	return " -X runic/internal/update.Repo=" + repo
 }
 
 func main() {
