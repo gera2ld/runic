@@ -37,6 +37,7 @@ docker run -d --name runic --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e RUNIC_HOST=0.0.0.0 \
   -e RUNIC_TAGS=docker,prod \
+  -e TZ=Asia/Shanghai \
   ghcr.io/gera2ld/runic:latest
 ```
 
@@ -44,6 +45,7 @@ Notes:
 
 - Put your `config.yml` in the mounted dir (here `~/.runic`); `runic.db` and `logs/` live next to it. The container serves `/data/config.yml` by default.
 - `RUNIC_HOST=0.0.0.0` is required — the default `127.0.0.1` is unreachable from outside the container.
+- Cron schedules run in the container's local timezone (default UTC). Set `-e TZ=<IANA timezone>` (e.g. `Asia/Shanghai`) to change it; the image ships `tzdata`.
 - Mounting `/var/run/docker.sock` (plus the bundled `docker` CLI) lets actions manage the host's containers, e.g.:
 
 ```yaml
@@ -68,6 +70,7 @@ services:
     environment:
       RUNIC_HOST: 0.0.0.0
       RUNIC_TAGS: docker,prod
+      TZ: Asia/Shanghai
 ```
 
 ## Configuration

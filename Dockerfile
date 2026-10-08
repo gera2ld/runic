@@ -8,10 +8,7 @@
 
 FROM oven/bun:1-alpine
 ARG TARGETARCH
-# bash: actions run via `bash -c`. curl: handy for actions. docker-cli: lets
-# actions talk to a mounted /var/run/docker.sock. openssl: for actions
-# needing TLS tooling.
-RUN apk add --no-cache bash curl docker-cli openssl
+RUN apk add --no-cache bash curl docker-cli openssl tzdata
 COPY --chmod=0755 bin/runic-linux-${TARGETARCH} /usr/local/bin/runic
 WORKDIR /data
 VOLUME /data
