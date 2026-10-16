@@ -95,6 +95,14 @@ Actions are defined under the `actions` map, keyed by action id. Only `command` 
 
 `concurrency` defaults to `1`. Set it to `0` to allow unlimited overlapping runs.
 
+Environment variable values shown in the system view are redacted when their name matches any entry in `sensitive_patterns` (a list of regular expressions, matched case-insensitively; defaults to `key`, `secret`, `password`, `token`, `auth`, `credential`, `passwd`):
+
+```yaml
+sensitive_patterns:
+  - 'token'
+  - 'secret|password'
+```
+
 ## Multi-server targeting
 
 Give each server tags via `RUNIC_TAGS` (comma-separated, e.g. `RUNIC_TAGS=prod,gpu`) and target actions at them:

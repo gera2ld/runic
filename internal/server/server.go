@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -268,17 +269,33 @@ func (s *Server) handleListActions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	envVars := os.Environ()
-	sensitiveSuffixes := []string{"key", "secret", "password", "token", "auth", "credential", "passwd"}
+	cfg := s.runner.Config()
+	patterns := append([]string{}, cfg.SensitivePatterns...)
+	if len(patterns) == 0 {
+		patterns = append([]string{}, config.DefaultSensitivePatterns...)
+	}
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, p := range patterns {
+		if re, err := regexp.Compile("(?i)" + p); err == nil {
+			compiled = append(compiled, re)
+		}
+	}
+	if len(compiled) == 0 {
+		for _, p := range config.DefaultSensitivePatterns {
+			if re, err := regexp.Compile("(?i)" + p); err == nil {
+				compiled = append(compiled, re)
+			}
+		}
+	}
 	env := make([]map[string]string, 0)
 	for _, e := range envVars {
 		parts := strings.SplitN(e, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		lower := strings.ToLower(parts[0])
 		redacted := false
-		for _, s := range sensitiveSuffixes {
-			if strings.Contains(lower, s) {
+		for _, re := range compiled {
+			if re.MatchString(parts[0]) {
 				redacted = true
 				break
 			}
@@ -294,7 +311,6 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	cfg := s.runner.Config()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"version":    runtime.Version(),
 		"os":         runtime.GOOS,
@@ -303,14 +319,15 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"goroutines": runtime.NumGoroutine(),
 		"cpus":       runtime.NumCPU(),
 		"config": map[string]interface{}{
-			"host":        cfg.Host,
-			"port":        cfg.Port,
-			"timeout":     cfg.Timeout,
-			"data_dir":    cfg.DataDir,
-			"log_dir":     cfg.LogDir,
-			"clean_days":  cfg.CleanDays,
-			"max_log_num": cfg.MaxLogNum,
-			"tags":        cfg.Tags,
+			"host":               cfg.Host,
+			"port":               cfg.Port,
+			"timeout":            cfg.Timeout,
+			"data_dir":           cfg.DataDir,
+			"log_dir":            cfg.LogDir,
+			"clean_days":         cfg.CleanDays,
+			"max_log_num":        cfg.MaxLogNum,
+			"tags":               cfg.Tags,
+			"sensitive_patterns": cfg.SensitivePatterns,
 		},
 		"environment": env,
 	})
@@ -431,6 +448,9 @@ func nonActionChanges(cur, next *config.Config) []string {
 	}
 	if cur.MaxLogNum != next.MaxLogNum {
 		changed = append(changed, "max_log_num")
+	}
+	if !reflect.DeepEqual(cur.SensitivePatterns, next.SensitivePatterns) {
+		changed = append(changed, "sensitive_patterns")
 	}
 	return changed
 }

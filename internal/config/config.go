@@ -53,6 +53,12 @@ func validate(data []byte) error {
 }
 
 func validateSemantics(cfg *Config) error {
+	// Validate redaction patterns up front so misconfiguration fails on load.
+	for _, p := range cfg.SensitivePatterns {
+		if _, err := regexp.Compile(p); err != nil {
+			return fmt.Errorf("invalid sensitive pattern %q: %v", p, err)
+		}
+	}
 	for id, a := range cfg.Actions {
 		if a == nil {
 			return fmt.Errorf("action %q: definition must be an object", id)
@@ -115,6 +121,10 @@ type Config struct {
 	LogDir         string                   `yaml:"-"`
 	CleanDays      int                      `yaml:"clean_days"`
 	MaxLogNum      int                      `yaml:"max_log_num"`
+	// Patterns (regular expressions, matched case-insensitively against
+	// environment variable names) whose values are redacted in /api/system.
+	// Defaults to the built-in sensitive patterns when unset.
+	SensitivePatterns []string `yaml:"sensitive_patterns"`
 }
 
 func Load(path string) (*Config, error) {
@@ -187,8 +197,17 @@ func Load(path string) (*Config, error) {
 	cfg.DBPath = filepath.Join(cfg.DataDir, "runic.db")
 	cfg.LogDir = filepath.Join(cfg.DataDir, "logs")
 
+	// Default redaction patterns preserve prior behavior when unset.
+	if cfg.SensitivePatterns == nil {
+		cfg.SensitivePatterns = append([]string{}, DefaultSensitivePatterns...)
+	}
+
 	return cfg, nil
 }
+
+// DefaultSensitivePatterns are matched case-insensitively against environment
+// variable names to decide which values get redacted in /api/system.
+var DefaultSensitivePatterns = []string{"key", "secret", "password", "token", "auth", "credential", "passwd"}
 
 // ParseTags splits a comma-separated tag list (e.g. RUNIC_TAGS) into
 // trimmed, non-empty tags.

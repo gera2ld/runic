@@ -46,7 +46,12 @@
     "tags": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Tags identifying this server. An action runs here if any of its tags matches. Overridden by RUNIC_TAGS."
+      "description": "Tags identifying this server. An action runs where any of its tags matches. Overridden by RUNIC_TAGS."
+    },
+    "sensitive_patterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Regular expressions (matched case-insensitively) against environment variable names; matching values are redacted in the system view."
     }
   },
   "$defs": {
