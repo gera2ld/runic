@@ -21,7 +21,8 @@ const router = createRouter({
     {
       path: "/actions/:id/executions",
       name: "action-executions",
-      component: () => import("./views/ActionExecutionsPage.vue"),
+      component: () => import("./views/ExecutionList.vue"),
+      props: (route) => ({ actionId: route.params.id as string }),
     },
     {
       path: "/actions/:id/executions/:hid",
@@ -32,6 +33,7 @@ const router = createRouter({
       path: "/executions",
       name: "executions",
       component: () => import("./views/ExecutionList.vue"),
+      props: (route) => ({ system: route.query.system === "true" }),
     },
     {
       path: "/system",
