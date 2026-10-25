@@ -3,8 +3,7 @@ import { ref, onMounted } from "vue";
 import AppLayout from "../components/AppLayout.vue";
 import ExecutionTable from "../components/ExecutionTable.vue";
 import { fetchHistory, fetchSystem, reloadConfig } from "../api";
-import { useActionPoller } from "../poller";
-import { patchHistory } from "../utils";
+import { usePageRefresh } from "../refresh";
 import type { HistoryEntry } from "../utils";
 
 interface ReloadResult {
@@ -43,7 +42,6 @@ const reloading = ref(false);
 const reloadMsg = ref<{ ok: boolean; text: string } | null>(null);
 
 async function refresh() {
-  loading.value = true;
   try {
     data.value = (await fetchSystem()) as unknown as SystemData;
     const h = await fetchHistory({ system: true });
@@ -53,13 +51,6 @@ async function refresh() {
   }
   loading.value = false;
 }
-
-useActionPoller(
-  () => history.value.filter((e) => e.status === "RUNNING").map((e) => e.id),
-  (entries) => {
-    history.value = patchHistory(history.value, entries);
-  },
-);
 
 function summarizeReload(r: ReloadResult): string {
   const parts: string[] = [];
@@ -90,6 +81,7 @@ async function reload() {
   reloading.value = false;
 }
 
+usePageRefresh(refresh);
 onMounted(() => refresh());
 </script>
 
@@ -104,12 +96,6 @@ onMounted(() => refresh());
           class="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-lg text-sm text-primary font-medium transition disabled:opacity-50"
         >
           {{ reloading ? "Reloading…" : "Reload Config" }}
-        </button>
-        <button
-          @click="refresh"
-          class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition"
-        >
-          Refresh
         </button>
       </div>
     </div>

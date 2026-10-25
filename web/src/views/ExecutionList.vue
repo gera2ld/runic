@@ -5,9 +5,8 @@ import Breadcrumbs from "../components/Breadcrumbs.vue";
 import Pagination from "../components/Pagination.vue";
 import ExecutionTable from "../components/ExecutionTable.vue";
 import { fetchActionDetail, fetchHistory } from "../api";
-import { useActionPoller } from "../poller";
-import { patchHistory } from "../utils";
 import { actionUrl } from "../urls";
+import { usePageRefresh } from "../refresh";
 import type { HistoryEntry, ActionDef } from "../utils";
 
 const props = withDefaults(
@@ -40,19 +39,14 @@ const breadcrumbs = computed(() => {
     ];
   }
   if (props.system) {
-    return [
-      { label: "Executions", to: "/executions" },
-      { label: "System" },
-    ];
+    return [{ label: "Executions", to: "/executions" }, { label: "System" }];
   }
   return [{ label: "Executions" }];
 });
 
 async function refresh() {
-  loading.value = true;
   try {
     if (props.actionId) {
-      actionDef.value = null;
       const a = await fetchActionDetail(props.actionId);
       if (a && a.id) actionDef.value = a;
       const h = await fetchHistory({ actionId: props.actionId });
@@ -66,17 +60,10 @@ async function refresh() {
     history.value = [];
   }
   loading.value = false;
-  p.value = 1;
+  if (p.value > Math.max(1, Math.ceil(history.value.length / pageSize))) p.value = 1;
 }
 
-useActionPoller(
-  () => history.value.filter((e) => e.status === "RUNNING").map((e) => e.id),
-  (entries) => {
-    history.value = patchHistory(history.value, entries);
-    if (p.value > Math.max(1, Math.ceil(history.value.length / pageSize))) p.value = 1;
-  },
-);
-
+usePageRefresh(refresh);
 onMounted(() => refresh());
 
 watch(
@@ -93,15 +80,7 @@ watch(
   <AppLayout>
     <div v-if="loading" class="text-faint text-sm">Loading...</div>
     <template v-else>
-      <div class="flex items-center justify-between mb-4">
-        <Breadcrumbs :items="breadcrumbs" />
-        <button
-          @click="refresh"
-          class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition"
-        >
-          Refresh
-        </button>
-      </div>
+      <Breadcrumbs :items="breadcrumbs" class="mb-4" />
       <div
         v-if="history.length === 0"
         class="text-faint text-sm bg-surface rounded-lg border border-line px-4 py-8 text-center"

@@ -4,8 +4,7 @@ import AppLayout from "../components/AppLayout.vue";
 import ActionCard from "../components/ActionCard.vue";
 import ExecutionTable from "../components/ExecutionTable.vue";
 import { fetchHistory, fetchActions } from "../api";
-import { useActionPoller } from "../poller";
-import { patchHistory } from "../utils";
+import { usePageRefresh } from "../refresh";
 import type { HistoryEntry, ActionDef } from "../utils";
 
 const history = ref<HistoryEntry[]>([]);
@@ -32,7 +31,6 @@ const recentActions = computed(() => {
 });
 
 async function refreshHistory() {
-  loading.value = true;
   try {
     const h = await fetchHistory();
     history.value = Array.isArray(h) ? h : [];
@@ -44,7 +42,6 @@ async function refreshHistory() {
 }
 
 async function refreshActions() {
-  actionLoading.value = true;
   try {
     const a = await fetchActions();
     actions.value = Array.isArray(a) ? a : [];
@@ -55,32 +52,17 @@ async function refreshActions() {
   actionLoading.value = false;
 }
 
-function refresh() {
-  refreshHistory();
-  refreshActions();
+async function refresh() {
+  await Promise.all([refreshHistory(), refreshActions()]);
 }
 
-useActionPoller(
-  () => history.value.filter((e) => e.status === "RUNNING").map((e) => e.id),
-  (entries) => {
-    history.value = patchHistory(history.value, entries);
-  },
-);
-
+usePageRefresh(refresh);
 onMounted(() => refresh());
 </script>
 
 <template>
   <AppLayout :toast="toast" @toast="(v: string) => (toast = v)">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-semibold">Overview</h1>
-      <button
-        @click="refresh"
-        class="px-3 py-1.5 bg-primary-solid hover:bg-primary-hover rounded-lg text-sm font-medium transition"
-      >
-        Refresh
-      </button>
-    </div>
+    <h1 class="text-2xl font-semibold mb-6">Overview</h1>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
       <div class="lg:col-span-1 @container">

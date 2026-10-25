@@ -1,4 +1,3 @@
-export const MAX_HISTORY = 500;
 export const PER_PAGE = 20;
 export const MAX_VISIBLE_PAGES = 5;
 
@@ -66,19 +65,4 @@ export interface ActionDef {
   next_run: string | null;
   last_run: string | null;
   last_run_status: string | null;
-}
-
-export function patchHistory(current: HistoryEntry[], updates: HistoryEntry[]): HistoryEntry[] {
-  if (!Array.isArray(updates)) return current;
-  const res = [...current];
-  for (const u of updates) {
-    const idx = res.findIndex((e) => e.id === u.id);
-    if (idx !== -1) {
-      res[idx] = { ...res[idx], ...u };
-    } else {
-      res.push(u);
-    }
-  }
-  res.sort((a, b) => b.id - a.id);
-  return res.slice(0, MAX_HISTORY);
 }

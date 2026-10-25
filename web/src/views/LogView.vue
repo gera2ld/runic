@@ -4,9 +4,9 @@ import { useRoute } from "vue-router";
 import AppLayout from "../components/AppLayout.vue";
 import Breadcrumbs from "../components/Breadcrumbs.vue";
 import { fetchHistory, fetchLogs } from "../api";
-import { useActionPoller } from "../poller";
 import { statusClass, formatMs, formatDate, timeAgo } from "../utils";
 import { actionUrl, actionExecutionsUrl } from "../urls";
+import { usePageRefresh } from "../refresh";
 import type { HistoryEntry } from "../utils";
 
 const route = useRoute();
@@ -40,30 +40,7 @@ async function refresh() {
   loading.value = false;
 }
 
-useActionPoller(
-  () => {
-    if (entry.value && entry.value.status === "RUNNING") return [entry.value.id];
-    return [];
-  },
-  (entries) => {
-    if (entry.value && entries.length > 0) {
-      for (const e of entries) {
-        if (e.id === entry.value.id) {
-          entry.value = { ...entry.value, ...e };
-          break;
-        }
-      }
-    }
-    const hid = route.params.hid ? parseInt(route.params.hid as string) : 0;
-    fetchLogs(hid)
-      .then((r) => (r.ok ? r.text() : null))
-      .then((t) => {
-        if (t) logContent.value = t;
-      })
-      .catch(() => {});
-  },
-);
-
+usePageRefresh(refresh);
 onMounted(() => refresh());
 </script>
 

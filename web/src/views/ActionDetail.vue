@@ -4,9 +4,9 @@ import { useRoute } from "vue-router";
 import AppLayout from "../components/AppLayout.vue";
 import Breadcrumbs from "../components/Breadcrumbs.vue";
 import { fetchActionDetail, fetchHistory, triggerAction } from "../api";
-import { useActionPoller } from "../poller";
-import { patchHistory, statusClass, formatDate, timeAgo, formatTimeout, PER_PAGE } from "../utils";
+import { statusClass, formatDate, timeAgo, formatTimeout, PER_PAGE } from "../utils";
 import { actionUrl, actionExecutionsUrl, executionUrl } from "../urls";
+import { usePageRefresh } from "../refresh";
 import type { HistoryEntry, ActionDef } from "../utils";
 
 const route = useRoute();
@@ -36,7 +36,6 @@ const lastRunStatus = computed(() => {
 
 async function refresh() {
   try {
-    actionDef.value = null;
     const a = await fetchActionDetail(route.params.id as string);
     if (a && a.id) actionDef.value = a;
     const h = await fetchHistory({ actionId: route.params.id as string });
@@ -48,13 +47,6 @@ async function refresh() {
   }
   loading.value = false;
 }
-
-useActionPoller(
-  () => filtered.value.filter((e) => e.status === "RUNNING").map((e) => e.id),
-  (entries) => {
-    history.value = patchHistory(history.value, entries);
-  },
-);
 
 async function trigger() {
   try {
@@ -74,6 +66,7 @@ const breadcrumbs = computed(() => [
   },
 ]);
 
+usePageRefresh(refresh);
 onMounted(() => refresh());
 watch(
   () => route.params.id,

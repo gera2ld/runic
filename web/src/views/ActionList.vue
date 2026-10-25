@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import AppLayout from "../components/AppLayout.vue";
 import ActionCard from "../components/ActionCard.vue";
 import { fetchActions } from "../api";
+import { usePageRefresh } from "../refresh";
 import type { ActionDef } from "../utils";
 
 const actions = ref<ActionDef[]>([]);
@@ -13,7 +14,6 @@ const inactiveActions = computed(() => actions.value.filter((a) => !a.system && 
 const systemActions = computed(() => actions.value.filter((a) => a.system));
 
 async function refresh() {
-  loading.value = true;
   try {
     const a = await fetchActions();
     actions.value = Array.isArray(a) ? a : [];
@@ -24,6 +24,7 @@ async function refresh() {
   loading.value = false;
 }
 
+usePageRefresh(refresh);
 onMounted(() => refresh());
 </script>
 
