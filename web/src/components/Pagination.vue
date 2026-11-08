@@ -29,14 +29,14 @@ const pages = computed(() => {
 <template>
   <div
     v-if="tp > 1 || pageSizeOptions"
-    class="flex items-center justify-between mb-4 text-sm text-muted"
+    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4 text-sm text-muted"
   >
     <span v-if="tp > 1">
       {{ (modelValue - 1) * pageSize + 1 }}-{{ Math.min(modelValue * pageSize, total) }} of
       {{ total }}
     </span>
     <span v-else> {{ total }} {{ total === 1 ? "result" : "results" }} </span>
-    <div class="flex gap-4 items-center">
+    <div class="flex gap-4 items-center flex-wrap">
       <label v-if="pageSizeOptions" class="flex items-center gap-2 text-xs text-muted">
         <span>Per page</span>
         <select
@@ -62,7 +62,7 @@ const pages = computed(() => {
           :class="
             n === modelValue
               ? 'bg-primary-solid text-body'
-              : 'border border-line-muted hover:bg-elevated'
+              : 'hidden sm:block border border-line-muted hover:bg-elevated'
           "
           class="px-3 py-1 rounded transition"
         >

@@ -30,7 +30,7 @@ onMounted(() => refresh());
 
 <template>
   <AppLayout>
-    <h1 class="text-2xl font-semibold mb-6">Actions</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Actions</h1>
     <div v-if="loading" class="text-faint text-sm">Loading...</div>
     <template v-else>
       <h2 class="text-lg font-semibold text-subdued mb-3">

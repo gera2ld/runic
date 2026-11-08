@@ -49,7 +49,7 @@ onMounted(() => refresh());
     <div v-if="loading" class="text-faint">Loading...</div>
     <template v-else>
       <Breadcrumbs :items="breadcrumbs" class="mb-4" />
-      <div v-if="entry" class="mb-6 flex items-center gap-4 flex-wrap">
+      <div v-if="entry" class="mb-4 sm:mb-6 flex items-center gap-x-4 gap-y-2 flex-wrap">
         <span class="text-dim text-sm">
           Action:
           <router-link
@@ -74,7 +74,7 @@ onMounted(() => refresh());
         >
       </div>
       <pre
-        class="bg-surface border border-line rounded-lg p-4 font-mono text-xs text-subdued leading-relaxed overflow-auto max-h-[70vh]"
+        class="bg-surface border border-line rounded-lg p-3 sm:p-4 font-mono text-xs text-subdued leading-relaxed overflow-auto max-h-[70vh]"
         >{{ logContent || "No log content." }}</pre
       >
     </template>

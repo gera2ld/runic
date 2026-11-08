@@ -22,12 +22,12 @@ const visible = computed(() => (props.limit ? props.entries.slice(0, props.limit
     <table class="w-full text-sm">
       <thead class="bg-surface text-muted uppercase text-xs">
         <tr>
-          <th class="px-4 py-3 text-left w-16">ID</th>
-          <th v-if="showAction" class="px-4 py-3 text-left">Action</th>
-          <th class="px-4 py-3 text-left w-28">Status</th>
-          <th v-if="showDuration" class="px-4 py-3 text-left w-24">Duration</th>
-          <th class="px-4 py-3 text-left w-48">Started</th>
-          <th class="px-4 py-3 text-left w-20">Log</th>
+          <th class="px-4 py-3 text-left w-16 min-w-16">ID</th>
+          <th v-if="showAction" class="px-4 py-3 text-left min-w-48">Action</th>
+          <th class="px-4 py-3 text-left w-28 min-w-28">Status</th>
+          <th v-if="showDuration" class="px-4 py-3 text-left w-24 min-w-24">Duration</th>
+          <th class="px-4 py-3 text-left w-48 min-w-40">Started</th>
+          <th class="px-4 py-3 text-left w-20 min-w-16">Log</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-rule">

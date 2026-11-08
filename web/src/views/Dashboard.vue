@@ -62,9 +62,9 @@ onMounted(() => refresh());
 
 <template>
   <AppLayout :toast="toast" @toast="(v: string) => (toast = v)">
-    <h1 class="text-2xl font-semibold mb-6">Overview</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Overview</h1>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
       <div class="lg:col-span-1 @container">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-lg font-semibold text-subdued">Recent Actions</h2>

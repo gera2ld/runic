@@ -3,9 +3,10 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppLayout from "../components/AppLayout.vue";
 import Breadcrumbs from "../components/Breadcrumbs.vue";
+import ExecutionTable from "../components/ExecutionTable.vue";
 import { fetchActionDetail, fetchHistory, triggerAction } from "../api";
 import { statusClass, formatDate, timeAgo, formatTimeout, PER_PAGE } from "../utils";
-import { actionUrl, actionExecutionsUrl, executionUrl } from "../urls";
+import { actionUrl, actionExecutionsUrl } from "../urls";
 import { usePageRefresh } from "../refresh";
 import type { HistoryEntry, ActionDef } from "../utils";
 
@@ -84,10 +85,10 @@ watch(
     <template v-else>
       <Breadcrumbs :items="breadcrumbs" class="mb-4" />
       <div v-if="actionDef">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <div class="lg:col-span-1 bg-surface border border-line rounded-lg p-4 flex flex-col">
             <h1 class="font-semibold text-primary truncate mb-2">{{ actionDef.name }}</h1>
-            <div class="flex gap-1 mb-2 min-h-[20px]">
+            <div class="flex gap-1 mb-2 min-h-[20px] flex-wrap">
               <span
                 v-if="!actionDef.active"
                 class="text-xs px-1.5 py-0.5 bg-subtle text-muted rounded font-mono"
@@ -136,7 +137,7 @@ watch(
                   >{{ lastRunStatus }}</span
                 >
               </div>
-              <div class="text-xs text-muted font-mono">
+              <div class="text-xs text-muted font-mono break-all">
                 <span class="text-faint">CWD:</span> {{ actionDef.cwd }}
               </div>
               <div class="text-xs text-muted font-mono">
@@ -173,51 +174,14 @@ watch(
             >
               No executions yet.
             </div>
-            <div v-else class="overflow-x-auto rounded-lg border border-line">
-              <table class="w-full text-sm">
-                <thead class="bg-surface text-muted uppercase text-xs">
-                  <tr>
-                    <th class="px-4 py-2 text-left w-16">ID</th>
-                    <th class="px-4 py-2 text-left w-24">Status</th>
-                    <th class="px-4 py-2 text-left w-48">Started</th>
-                    <th class="px-4 py-2 text-left w-20">Log</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-rule">
-                  <tr
-                    v-for="e in filtered.slice(0, 5)"
-                    :key="e.id"
-                    class="hover:bg-surface/50 transition"
-                  >
-                    <td class="px-4 py-2 font-mono text-faint">{{ e.id }}</td>
-                    <td class="px-4 py-2">
-                      <span
-                        :class="statusClass(e.status)"
-                        class="px-2 py-0.5 rounded text-xs font-bold text-body"
-                        >{{ e.status }}</span
-                      >
-                    </td>
-                    <td class="px-4 py-2 text-dim text-xs" :title="formatDate(e.created_at)">
-                      {{ timeAgo(e.created_at) }}
-                    </td>
-                    <td class="px-4 py-2">
-                      <router-link
-                        :to="executionUrl(e.action_id, e.id)"
-                        class="text-accent hover:text-accent-dim text-xs font-medium"
-                        >View</router-link
-                      >
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <ExecutionTable v-else :entries="filtered" :limit="5" :show-action="false" />
           </div>
         </div>
 
         <div>
           <h2 class="text-lg font-semibold mb-3 text-subdued">Script</h2>
           <pre
-            class="p-4 bg-surface border border-line rounded-lg text-sm text-subdued whitespace-pre-wrap font-mono"
+            class="p-3 sm:p-4 bg-surface border border-line rounded-lg text-xs sm:text-sm text-subdued whitespace-pre-wrap break-words font-mono"
             >{{ actionDef.command }}</pre
           >
         </div>

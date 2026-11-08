@@ -87,8 +87,8 @@ onMounted(() => refresh());
 
 <template>
   <AppLayout>
-    <div class="flex items-center justify-between mb-2">
-      <h1 class="text-2xl font-semibold">System</h1>
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h1 class="text-xl sm:text-2xl font-semibold">System</h1>
       <div class="flex items-center gap-3">
         <button
           @click="reload"
@@ -137,15 +137,15 @@ onMounted(() => refresh());
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mb-10">
         <div class="lg:col-span-1 @container">
           <h2 class="text-lg font-semibold mb-3 text-subdued">Configuration</h2>
           <div
             class="bg-surface border border-line rounded-lg p-4 grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 text-sm"
           >
-            <div v-for="(v, k) in data.config" :key="k" class="flex justify-between">
+            <div v-for="(v, k) in data.config" :key="k" class="flex justify-between gap-3">
               <span class="text-dim">{{ k }}</span>
-              <span class="font-mono text-subdued">{{ v }}</span>
+              <span class="font-mono text-subdued break-all text-right">{{ v }}</span>
             </div>
           </div>
         </div>
@@ -174,14 +174,16 @@ onMounted(() => refresh());
         <table class="w-full text-sm">
           <thead class="bg-surface text-muted uppercase text-xs">
             <tr>
-              <th class="px-4 py-3 text-left w-1/3">Name</th>
-              <th class="px-4 py-3 text-left">Value</th>
+              <th class="px-3 sm:px-4 py-3 text-left sm:w-1/3 min-w-48">Name</th>
+              <th class="px-4 py-3 text-left min-w-64">Value</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-rule">
             <tr v-for="e in data.environment" :key="e.name" class="hover:bg-surface/50 transition">
-              <td class="px-4 py-2 font-mono text-primary">{{ e.name }}</td>
-              <td class="px-4 py-2 font-mono text-subdued break-all">{{ e.value }}</td>
+              <td class="px-3 sm:px-4 py-2 font-mono text-primary break-all align-top">
+                {{ e.name }}
+              </td>
+              <td class="px-3 sm:px-4 py-2 font-mono text-subdued break-all">{{ e.value }}</td>
             </tr>
           </tbody>
         </table>
